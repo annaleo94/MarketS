@@ -8,7 +8,9 @@ export interface SearchResultItem {
   inStock: boolean;
   sizes: string | null;
   color: string | null;
-  colors: string[]; // more than one for a multipack listing
+  // Every colour in the listing -- more than one for a multipack. Optional
+  // because a search cached before this field existed won't carry it.
+  colors?: string[];
   categorySlug: string | null;
   gender: string;
   score: number;
