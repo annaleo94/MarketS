@@ -1,0 +1,10 @@
+node_modules
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+.env
+**/.env
+.git
+*.md

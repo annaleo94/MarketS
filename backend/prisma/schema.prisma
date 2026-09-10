@@ -1,14 +1,15 @@
 // MarketS price-comparison database schema.
-// SQLite by default (zero-setup local/dev). Point DATABASE_URL at Postgres/MySQL
-// for a real deployment; Prisma's schema stays the same for those providers
-// (just change `provider` below and re-run `npm run db:push`).
+// Postgres in production (deployed against a managed Lathe instance).
+// For local dev without a Postgres server handy, point DATABASE_URL at any
+// Postgres you have (docker, a free-tier host, etc) -- SQLite was dropped
+// once this stopped being a zero-setup demo.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

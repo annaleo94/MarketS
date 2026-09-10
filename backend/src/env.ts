@@ -29,4 +29,9 @@ export const env = {
   // Optional shared secret for POST /api/admin/ingest. Leave unset for
   // local/dev use.
   adminToken: process.env.ADMIN_TOKEN ?? "",
+
+  // Where the built frontend lives, for serving it alongside the API in
+  // production (see index.ts + the root Dockerfile). Doesn't exist in
+  // local dev, where the frontend runs its own Vite server instead.
+  frontendDistPath: process.env.FRONTEND_DIST_PATH ?? "/app/frontend-dist",
 };

@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import path from "node:path";
+import fs from "node:fs";
 import { env } from "./env";
 import { searchRoute } from "./routes/search.route";
 import { storesRoute } from "./routes/stores.route";
@@ -16,6 +18,17 @@ async function main() {
   app.use("/api", searchRoute);
   app.use("/api", storesRoute);
   app.use("/api", ingestRoute);
+
+  // In production this one container serves both the API and the built
+  // frontend (see the root Dockerfile) -- same origin, no CORS needed for
+  // the app itself. In local dev the frontend runs its own Vite server
+  // instead, so this directory won't exist and is simply skipped.
+  if (fs.existsSync(env.frontendDistPath)) {
+    app.use(express.static(env.frontendDistPath));
+    app.get(/^(?!\/api).*/, (_req, res) => {
+      res.sendFile(path.join(env.frontendDistPath, "index.html"));
+    });
+  }
 
   app.listen(env.port, () => {
     console.log(`[boot] MarketS API listening on http://localhost:${env.port}`);
