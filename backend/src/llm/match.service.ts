@@ -14,6 +14,7 @@ export interface CatalogEntry {
   imageUrl: string | null;
   inStock: boolean;
   color: string | null;
+  colorIsSolid: boolean | null;
 }
 
 export interface MatchResult {
@@ -128,7 +129,10 @@ interface LlmResponse {
 // confident "no match".
 async function matchWithLlm(rawQuery: string, products: CatalogEntry[]): Promise<MatchResult | null | undefined> {
   const catalogLines = products
-    .map((p) => `${p.id} | ${p.title}${p.color ? ` | צבע: ${p.color}` : ""} | ₪${p.price}`)
+    .map((p) => {
+      const color = p.color ? ` | צבע: ${p.color}${p.colorIsSolid === false ? " (רב-צבעוני)" : ""}` : "";
+      return `${p.id} | ${p.title}${color} | ₪${p.price}`;
+    })
     .join("\n");
 
   const response = await completeJson<LlmResponse>([
@@ -142,6 +146,8 @@ async function matchWithLlm(rawQuery: string, products: CatalogEntry[]): Promise
         'סווג את ההתאמה: "exact" אם המוצר הוא באמת מה שהלקוח ביקש (אותו סוג פריט וגם הצבע שביקש, אם ביקש צבע); ' +
         '"alternative" אם זה הדבר הקרוב ביותר בחנות אבל לא בדיוק מה שביקש (למשל בגד גוף במקום חולצה). ' +
         "אל תבחר מוצר בצבע אחר מזה שהלקוח ביקש -- במקרה כזה עדיף להחזיר null. " +
+        'מוצר המסומן "(רב-צבעוני)" אינו בצבע אחיד (למשל גוף לבן עם שרוולים בצבע אחר), ולכן כשהלקוח מבקש ' +
+        'צבע מסוים הוא לכל היותר "alternative" ולעולם לא "exact". ' +
         "אם באמת אין שום מוצר מתאים או קרוב ברשימה, החזר null. ענה אך ורק ב-JSON בפורמט: " +
         '{"productId": "<המזהה המדויק מהרשימה>" | null, "matchType": "exact" | "alternative", ' +
         '"reason": "הסבר קצר בעברית (משפט אחד)"}',

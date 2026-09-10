@@ -37,11 +37,11 @@ export async function enrichColors(): Promise<{ fromTitle: number; fromVision: n
     // pick up where this one stopped.
     const batch = needsVision.slice(0, env.ingestMaxVisionCalls);
     for (const product of batch) {
-      const color = await detectColorFromImage(product.imageUrl!);
-      if (!color) continue;
+      const detected = await detectColorFromImage(product.imageUrl!);
+      if (!detected) continue;
       await prisma.product.update({
         where: { id: product.id },
-        data: { color, colorSource: "vision" },
+        data: { color: detected.color, colorSource: "vision", colorIsSolid: detected.isSolid },
       });
       fromVision += 1;
     }
@@ -50,15 +50,19 @@ export async function enrichColors(): Promise<{ fromTitle: number; fromVision: n
   return { fromTitle, fromVision, unresolved: needsVision.length - fromVision };
 }
 
-async function detectColorFromImage(imageUrl: string): Promise<string | null> {
-  const response = await completeJsonAboutImage<{ color?: string | null }>(
-    `זו תמונה של פריט לבוש לתינוקות/ילדים מאתר חנות. מהו הצבע הדומיננטי של הבגד עצמו? ` +
-      `התעלם מהרקע, מהדוגמן/ית ומהדפסים קטנים. ` +
-      `בחר בדיוק אחד מהערכים הבאים: ${CANONICAL_COLORS.join(", ")}. ` +
-      `אם התמונה לא מציגה בגד או שהצבע לא ברור, החזר null. ` +
-      `ענה אך ורק ב-JSON: {"color": "<צבע>" | null}`,
+async function detectColorFromImage(imageUrl: string): Promise<{ color: string; isSolid: boolean } | null> {
+  const response = await completeJsonAboutImage<{ color?: string | null; isSolid?: boolean }>(
+    `זו תמונה של פריט לבוש לתינוקות/ילדים מאתר חנות. התעלם מהרקע ומהדוגמן/ית. ` +
+      `1) מהו הצבע העיקרי של הבגד עצמו? בחר בדיוק אחד מהערכים: ${CANONICAL_COLORS.join(", ")}. ` +
+      `2) האם הבגד בצבע אחיד אחד? החזר isSolid=false אם יש שילוב צבעים משמעותי -- ` +
+      `למשל שרוולים בצבע אחר מהגוף, פסים, או הדפס גדול שמכסה חלק ניכר מהבגד. ` +
+      `הדפס קטן על החזה עדיין נחשב אחיד. ` +
+      `אם התמונה לא מציגה בגד או שהצבע לא ברור, החזר color=null. ` +
+      `ענה אך ורק ב-JSON: {"color": "<צבע>" | null, "isSolid": true|false}`,
     imageUrl
   );
 
-  return normalizeColorName(response?.color);
+  const color = normalizeColorName(response?.color);
+  if (!color) return null;
+  return { color, isSolid: response?.isSolid !== false };
 }

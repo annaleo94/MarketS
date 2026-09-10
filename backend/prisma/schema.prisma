@@ -47,6 +47,10 @@ model Product {
   // so colour searches can reach that inventory too. See catalog/colors.ts.
   color       String?
   colorSource String? // "title" | "vision"
+  // False for colour-blocked/patterned garments, where a single colour name
+  // is misleading -- a cream shirt with mustard sleeves is not what someone
+  // asking for a white shirt means. Null when unknown.
+  colorIsSolid Boolean?
   updatedAt  DateTime @updatedAt
   createdAt  DateTime @default(now())
 

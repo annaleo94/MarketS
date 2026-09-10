@@ -81,6 +81,7 @@ async function matchAcrossStores(rawQuery: string): Promise<SearchResultItem[]> 
       imageUrl: p.imageUrl,
       inStock: p.inStock,
       color: p.color,
+      colorIsSolid: p.colorIsSolid,
     }));
 
     try {

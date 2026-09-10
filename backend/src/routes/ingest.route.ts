@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { runIngest } from "../catalog/ingest";
+import { prisma } from "../db/prisma";
 import { env } from "../env";
 
 export const ingestRoute = Router();
@@ -25,8 +26,24 @@ ingestRoute.post("/admin/ingest", async (req, res) => {
   // runs well past the proxy's request timeout, so the job is started and
   // acknowledged rather than awaited -- the caller would only ever see a
   // disconnect. Progress goes to the app log; /api/stores shows the result.
+  // ?recolor=1 discards colours previously read from photos so they're
+  // resolved again -- for when the detection itself has been improved and
+  // the stored values are known to be wrong. Colours the store stated in
+  // its own title are left alone.
+  const recolor = req.query.recolor === "1";
+
   ingestInProgress = true;
-  runIngest()
+  Promise.resolve()
+    .then(async () => {
+      if (recolor) {
+        const { count } = await prisma.product.updateMany({
+          where: { colorSource: "vision" },
+          data: { color: null, colorSource: null, colorIsSolid: null },
+        });
+        console.log(`[ingest] cleared ${count} photo-derived colour(s) for re-detection`);
+      }
+    })
+    .then(() => runIngest())
     .then((summaries) => console.log("[ingest] finished:", JSON.stringify(summaries)))
     .catch((err) => console.error("[/api/admin/ingest] failed:", err))
     .finally(() => {
