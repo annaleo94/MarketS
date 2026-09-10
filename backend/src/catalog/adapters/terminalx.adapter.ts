@@ -4,20 +4,49 @@ import { env } from "../../env";
 
 const BASE_URL = "https://www.terminalx.com";
 
-// TerminalX is a multi-brand marketplace, so the pilot's scope is the two
-// category trees that are baby/kids-only. Verified 2026-09 against the
-// site's own sitemap.
-const CATEGORY_PATHS = ["/baby/view-all", "/kids"];
+// Crawled per garment type rather than through the store's two "everything"
+// listings. Those hold 3,824 and 9,286 products, far more than a courteous
+// crawl can take, and they sort newest-first -- so a capped crawl in
+// September returned autumn arrivals and almost no swimwear at all. Per
+// type, the cap applies to each kind of garment separately: swimwear (85
+// baby + 166 kids) now arrives whole instead of being buried behind
+// thousands of coats.
+//
+// Paths verified 2026-09 against the site's own sitemap; every one of them
+// returns a listing.
+const CATEGORY_PATHS = [
+  "/kids/baby/swimwear",
+  "/kids/baby/shirts",
+  "/kids/baby/pants-leggings",
+  "/kids/baby/dresses-skirts",
+  "/kids/baby/bodysuits-overalls",
+  "/kids/baby/sets-packs",
+  "/kids/baby/pajamas-underwear",
+  "/kids/baby/jackets-coats",
+  "/kids/baby/sweatshirts-jumpers",
+  "/kids/baby/accessories",
+  "/kids/baby/shoes",
+  "/kids/all/swimwear",
+  "/kids/all/shirts",
+  "/kids/all/pants",
+  "/kids/all/dresses-skirts",
+  "/kids/all/pyjamas-underwear",
+  "/kids/all/sweatshirts-jumpers",
+  "/kids/all/jackets-coats",
+  "/kids/all/shoes",
+];
 
 // The listing honours ?pageSize (the storefront's own paging parameter);
-// ?limit and ?product_list_limit are ignored. 96 is four pages' worth in
-// one request -- fewer round trips for them and for us. robots.txt
-// disallows ?limit=all, ?dir and ?mode, none of which are used here.
-const PAGE_SIZE = 96;
+// ?limit and ?product_list_limit are ignored. The bytes per product are the
+// same whatever the page size, so asking for more per request means fewer
+// round trips for the same data -- and at 192 most of these categories
+// arrive complete in one. robots.txt disallows ?limit=all, ?dir and ?mode,
+// none of which are used here.
+const PAGE_SIZE = 192;
 
-// Each listing page is 3-8MB of server-rendered state, so it needs longer
-// than the default fetch timeout.
-const FETCH_TIMEOUT_MS = 45000;
+// A full page of 192 products is ~9MB of server-rendered state, so it needs
+// considerably longer than the default fetch timeout.
+const FETCH_TIMEOUT_MS = 90000;
 
 // The storefront is a React app that renders server-side and hands the
 // client its state in `window.__INITIAL_STATE__` -- the same Magento

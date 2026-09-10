@@ -33,6 +33,21 @@ export function parseSizeLabel(raw: string): MonthRange | null {
     return { min: Number(from) * YEAR, max: (Number(to) + 1) * YEAR };
   }
 
+  // "11-12", "13-14", "2-3" -- a span of years written without the Y. The
+  // giveaway is the width: month ranges in these catalogues are always at
+  // least three wide ("0-3", "6-12", "12-18", "18-24", "12-24"), while the
+  // year ladder steps one at a time. One listing spells the whole thing
+  // out -- [12-18, 18-24, 2Y, 3Y ... 10Y, 11-12, 13-14, 15-16, 17-18] on a
+  // product titled "12M-18Y" -- so these continue the years, they don't
+  // restart the months. Read as months, "13-14" made a teen garment answer
+  // a search for a one-year-old.
+  const bareYearRange = label.match(/^(\d+)-(\d+)$/);
+  if (bareYearRange) {
+    const from = Number(bareYearRange[1]);
+    const to = Number(bareYearRange[2]);
+    if (to - from === 1 && to <= 18) return { min: from * YEAR, max: (to + 1) * YEAR };
+  }
+
   // "18-24m", "0-3", "3-6"
   const range = label.match(/^(\d+)-(\d+)\s*(m|מ|ח)?$/);
   if (range) {
