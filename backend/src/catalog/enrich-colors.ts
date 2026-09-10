@@ -50,8 +50,11 @@ export async function enrichColors(): Promise<{ fromTitle: number; fromVision: n
       const detected = await Promise.all(slice.map((p) => detectColorFromImage(p.imageUrl!)));
 
       for (const [j, result] of detected.entries()) {
-        if (!result) {
-          // Record the attempt so the next run skips it (see the query above).
+        // A request that never got an answer (a dropped TLS connection) is
+        // left alone so the next run retries it. Only a model that looked
+        // and found no garment is recorded as settled.
+        if (!result) continue;
+        if (result.colors.length === 0) {
           await prisma.product.update({ where: { id: slice[j].id }, data: { colorSource: "none" } });
           continue;
         }
@@ -105,8 +108,10 @@ async function detectColorFromImage(imageUrl: string): Promise<{ colors: string[
     const color = normalizeColorName(garment?.color);
     if (color && !colors.includes(color)) colors.push(color);
   }
-  if (colors.length === 0) return null;
 
+  // An empty set here is a real answer -- the model looked and saw no
+  // garment -- as distinct from the null above, which means the call never
+  // came back. The caller settles the first and retries the second.
   // A pack of differently-coloured garments is not a solid-coloured item,
   // whatever the individual garments are.
   const isSolid = colors.length === 1 && garments.every((g) => g?.isSolid !== false);
