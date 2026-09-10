@@ -75,6 +75,21 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
     summaries.push({ store: adapter.key, fetched: products.length, removed });
   }
 
+  // A store dropped from the registry (an adapter removed, or reverted
+  // out, as TerminalX was) otherwise leaves its products behind forever:
+  // the loop above only touches adapters that are still configured, so
+  // nothing ever prunes the old ones. Delete products first -- Product has
+  // no cascade on its Store foreign key -- then the store row itself, so a
+  // removed store's data doesn't linger and its old totalCount doesn't
+  // keep counting toward search results after it's gone.
+  const activeKeys = adapters.map((a) => a.key);
+  const orphanedStores = await prisma.store.findMany({ where: { key: { notIn: activeKeys } } });
+  for (const store of orphanedStores) {
+    const { count: deletedProducts } = await prisma.product.deleteMany({ where: { storeId: store.id } });
+    await prisma.store.delete({ where: { id: store.id } });
+    console.log(`[ingest] removed store ${store.key} (no longer configured): ${deletedProducts} products deleted`);
+  }
+
   // Category (and gender where it wasn't stated) for anything new.
   const classified = await classifyCatalog();
   console.log(
