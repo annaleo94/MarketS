@@ -208,10 +208,18 @@ function describeFilters(parsed: ParsedQuery): AppliedFilter[] {
   return filters;
 }
 
+// Cached rows hold a whole serialised SearchResponse, so a build that
+// changes that shape -- or changes how results are ranked or ordered --
+// would go on serving the old one until the TTL ran out, quietly missing
+// the new fields. Bump this whenever either changes; old entries then miss
+// and are rewritten rather than being served half-formed.
+const RESULTS_SCHEMA_VERSION = 2;
+
 function buildCacheKey(normalizedQuery: string, overrides?: Partial<ParsedQuery>): string {
-  if (!overrides || Object.keys(overrides).length === 0) return normalizedQuery;
+  const base = `v${RESULTS_SCHEMA_VERSION}:${normalizedQuery}`;
+  if (!overrides || Object.keys(overrides).length === 0) return base;
   // Removing a filter is a different search, so it needs its own entry.
-  return `${normalizedQuery}::${JSON.stringify(overrides)}`;
+  return `${base}::${JSON.stringify(overrides)}`;
 }
 
 function emptyResponse(rawQuery: string, normalizedQuery: string): SearchResponse {
