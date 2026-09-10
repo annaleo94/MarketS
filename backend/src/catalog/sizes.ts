@@ -99,6 +99,18 @@ export function productSizeRanges(sizesCsv: string | null): MonthRange[] {
 export function isShoeSizeLabel(raw: string): boolean {
   const label = raw.trim().replace(/\s+/g, "");
 
+  // "2627", "2829" -- TerminalX publishes a handful of its shoe sizes with
+  // the hyphen missing (the same feed also carries "26-27" and "28-29").
+  // Two consecutive shoe sizes run together; no clothing size is four
+  // digits. Checked before the plain-number rule below, which would
+  // otherwise read 2627 as a single number and reject it.
+  const merged = label.match(/^(\d{2})(\d{2})$/);
+  if (merged) {
+    const from = Number(merged[1]);
+    const to = Number(merged[2]);
+    if (from >= 15 && to <= 50 && to - from === 1) return true;
+  }
+
   // "36", "23.5"
   const single = Number(label.replace(",", "."));
   if (Number.isFinite(single)) return single >= 15 && single <= 50;
@@ -130,11 +142,15 @@ export function productHasSize(sizesCsv: string | null, requested: MonthRange): 
   const ranges = productSizeRanges(sizesCsv);
   if (ranges.length > 0) return ranges.some((r) => rangesOverlap(r, requested));
 
-  // Nothing on the age scale. If every label we can see is a shoe size, the
-  // product isn't answerable by an age at all -- excluding it is right,
-  // whereas the fallback below would have it match every age there is.
+  // Nothing on the age scale. If anything here is recognisably a shoe size,
+  // the product is sized for feet and an age can't answer it -- excluding it
+  // is right, whereas the fallback below would have it match every age there
+  // is. Deliberately "any" rather than "every": requiring every label to be
+  // recognisable meant a single malformed one undid the whole exclusion, and
+  // TerminalX ships exactly that (sandals listed 21,22,23,24,25,2627,2829,
+  // 30,31 -- their own hyphens missing -- answered a search for size 2).
   const labels = (sizesCsv ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (labels.length > 0 && labels.every(isShoeSizeLabel)) return false;
+  if (labels.some(isShoeSizeLabel)) return false;
 
   return true;
 }
