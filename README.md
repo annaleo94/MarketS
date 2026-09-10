@@ -1,116 +1,112 @@
 # MarketS
 
-חיפוש מוצר אחד → רשימת כל החנויות שמוכרות אותו, ממוינת מהזול ליקר.
-
-MarketS הוא מנוע השוואת מחירים: מחפשים מוצר, והמערכת שואלת כל חנות
-מחוברת "האם יש לך את זה, ובכמה?", ומחזירה תוצאה אחת ממוינת לפי מחיר.
+פיילוט: תארו פריט בגדים לתינוקות/ילדים במילים שלכם → רשימת החנויות שמוכרות
+אותו (פוקס, שילב, קרטרס), ממוינת מהזול ליקר. חיפוש בשפה חופשית מופעל ע"י LLM
+דרך [OpenRouter](https://openrouter.ai).
 
 ## איך זה עובד
 
 ```
-frontend (React)  →  backend (Express API)  →  Store adapters (מקבילית)
-                              │                      │
-                              │              ┌───────┴────────┐
-                              │           חנויות הדגמה     חנויות אמיתיות
-                              │           (נתונים מדומים)   (web scraping)
-                              ▼
-                      SQLite (מטמון תוצאות חיפוש, TTL)
+                    ┌─── npm run ingest ───┐
+                    │  (או POST /api/admin/ingest, או אוטומטי באתחול אם הקטלוג ריק)
+                    ▼                       │
+   fox.co.il ──┐                            │
+  shilav.co.il ─┼─► Catalog adapters ──► Product table (SQLite/Postgres)
+cartersoshkosh ─┘   (נתונים אמיתיים)              │
+                                                  ▼
+frontend (React) ──► GET /api/search?q=... ──► לכל חנות: LLM (OpenRouter) בוחר
+                                                 את המוצר המתאים ביותר לתיאור
+                                                 (או fallback למילות מפתח)
+                                                  │
+                                                  ▼
+                                       ממוין לפי מחיר + נשמר במטמון
 ```
 
-- **Frontend**: React + Vite + TypeScript, ממשק בעברית מימין-לשמאל.
-- **Backend**: Express + TypeScript. `GET /api/search?q=...` מריץ בקשה
-  מקבילית לכל חנות פעילה, לוקח מכל חנות את התוצאה הכי רלוונטית לשאילתה,
-  וממיין הכל לפי מחיר.
-- **מסד נתונים**: Prisma + SQLite (קובץ מקומי, אפס הגדרה). תוצאות חיפוש
-  נשמרות במטמון ל-`SEARCH_CACHE_TTL_MINUTES` דקות כדי לא להציף חנויות
-  אמיתיות בבקשות על כל הקלדה.
-- **חנויות**: כל חנות היא "אדפטר" שמיישם ממשק אחד —
-  `search(query) => { title, price, url, ... }[]` (`backend/src/scrapers/types.ts`).
-  איך הנתונים מגיעים (מדומה / scraping / API) לא משנה לשאר המערכת.
+זו לא ארכיטקטורה של "scrape בכל חיפוש" -- הקטלוג של כל חנות נשאב מראש
+(`npm run ingest`) ונשמר במסד הנתונים. חיפוש משתמש קורא מהאינדקס המקומי,
+ולכן מהיר ולא מציף את אתרי החנויות.
 
 ## הרצה מקומית
 
 ```bash
-npm install                      # מתקין את שני הצדדים (workspaces)
+npm install
 cp backend/.env.example backend/.env
-npm run db:push                  # יוצר את מסד ה-SQLite המקומי
+# ערכו את backend/.env: הוסיפו OPENROUTER_API_KEY (ראו למטה)
+npm run db:push --workspace backend
+npm run ingest --workspace backend   # שואב קטלוג אמיתי מ-3 החנויות (כ-1-2 דק')
 
-npm run dev:backend              # http://localhost:4000
-npm run dev:frontend             # http://localhost:5173 (עם פרוקסי ל-API)
+npm run dev:backend    # http://localhost:4000
+npm run dev:frontend   # http://localhost:5173
 ```
 
-פותחים `http://localhost:5173`, מחפשים משהו כמו "iphone 15" או
-"מכונת כביסה" — המערכת עובדת מיד, כי כברירת מחדל היא משתמשת בשלוש
-**חנויות הדגמה** עם קטלוג מוצרים מדומה (`backend/src/scrapers/adapters/mock-catalog.ts`)
-ותמחור שונה בכל חנות, כדי שתהיה השוואת מחירים אמיתית לראות.
+אם `backend/prisma/dev.db` ריק כשהשרת עולה, הוא ירוץ `ingest` אוטומטית
+ברקע -- אבל עדיף להריץ ידנית פעם ראשונה כדי לראות שהכול עבד.
 
-## חיבור חנויות אמיתיות (web scraping)
+## חיפוש בשפה חופשית (LLM)
 
-זה כבוי כברירת מחדל (`ENABLE_LIVE_SCRAPERS=false`). יש שני מנועי scraping
-גנריים מוכנים:
+1. פתחו [openrouter.ai/keys](https://openrouter.ai/keys), צרו מפתח.
+2. ב-`backend/.env`: `OPENROUTER_API_KEY=sk-or-...`
+3. אופציונלי: `OPENROUTER_MODEL` (ברירת מחדל: `google/gemini-2.5-flash` --
+   זול ומהיר, מספיק לניואנסים כמו "חולצה ורודה לתינוקת בת חצי שנה").
 
-1. **`generic-jsonld.adapter.ts`** — קורא נתוני `schema.org Product`
-   מובנים (`<script type="application/ld+json">`) שהרבה חנויות מטמיעות
-   ממילא ל-SEO. לא צריך selectors בכלל, ועמיד יותר בפני שינויי עיצוב.
-2. **`generic-css.adapter.ts`** — fallback מבוסס CSS selectors לחנויות
-   בלי JSON-LD.
+בלי מפתח, החיפוש נופל אוטומטית ל**התאמת מילות מפתח** פשוטה (חפיפת מילים
+עם כותרת המוצר) -- עדיין עובד, אבל לא מבין ניסוח חופשי/מילים נרדפות.
 
-**חשוב**: בזמן הפיתוח ניסיתי לאמת selectors מול כמה אתרי קמעונאות
-ישראליים אמיתיים (KSP, Ivory, Bug) דרך גישה מתוכנתת, וזה נחסם
-(403 / הגנת בוטים) או לא נתן מבנה HTML מהימן לאימות. במקום לשלוח קוד עם
-selectors מנוחשים שכנראה לא יעבדו, `backend/src/scrapers/adapters/live/sites.ts`
-מגיע ריק, עם תבנית להעתקה, וההוראות המדויקות איך לחבר חנות אמיתית
-(בדיקת robots.txt/תנאי שימוש, מציאת ה-search URL, אימות selectors מול
-הדפדפן בפועל) נמצאות ב־`backend/src/scrapers/adapters/live/README.md`.
-זה תשתית עבודה אמיתית — רק שחיבור חנות ספציפית דורש אימות ידני מול
-האתר החי, ולא ניתן לעשות זאת באופן אמין בלי גישה לדפדפן אמיתי מול כל
-אתר ואתר.
+**איך ההתאמה עובדת בפועל**: לכל חנות בנפרד, ה-API שולח ל-LLM את התיאור של
+הלקוח + את כל קטלוג המוצרים המאונדקס של אותה חנות (מזהה | כותרת | מחיר),
+ומבקש ממנו לבחור את המוצר המתאים ביותר (או `null` אם באמת אין התאמה טובה).
+ראו `backend/src/llm/match.service.ts`.
 
-לאתרים שמרנדרים תוצאות בצד לקוח (JS) יידרש אדפטר מבוסס Playwright
-(מותקן כבר כתלות) במקום fetch רגיל — מוסבר גם הוא ב-README הנ"ל.
+## מקורות הנתונים (אמיתיים, לא הדגמה)
 
-## מגבלת "אותו מוצר"
+| חנות | פלטפורמה | איך שואבים | קובץ |
+|---|---|---|---|
+| פוקס | Shopify | `/collections/<handle>/products.json` -- endpoint JSON ציבורי רשמי של Shopify | `backend/src/catalog/adapters/fox.adapter.ts` |
+| שילב | Shopify | אותו endpoint, קטגוריית `fashion-clothing` | `backend/src/catalog/adapters/shilav.adapter.ts` |
+| קרטרס | Magento (Hyva) | פרסור HTML של דף הקטגוריה -- הכותרת/מחיר/קישור מגיעים מתוך JSON מובנה (Google Tag Manager `dataLayer`) שמוטמע בכל כרטיס מוצר, לא ניחוש CSS selectors | `backend/src/catalog/adapters/carters.adapter.ts` |
 
-MarketS לא עושה זיהוי-ישות (entity resolution) מלא בין חנויות — במקום זה,
-מכל חנות נלקחת התוצאה שהכי מתאימה לשאילתת החיפוש (ניקוד רלוונטיות לפי
-חפיפת מילים, `backend/src/scrapers/normalize.ts`). זה עובד טוב לשאילתות
-ספציפיות ("iPhone 15 128GB") אבל לא מבטיח זיהוי אותו SKU בדיוק בין
-חנויות עם ניסוח שונה. שיפור עתידי טבעי: התאמה לפי ברקוד/מק"ט (EAN/GTIN)
-כשהוא זמין בנתוני ה-JSON-LD.
+**מיננה** נבדקה ונמצאה חסומה ע"י אתגר בוט אקטיבי של Cloudflare
+(`cf-mitigated: challenge`) -- לא עקפנו את זה, כי זו הגנה מכוונת נגד גישה
+אוטומטית. הוחלפה בקרטרס בהתאם להחלטת המשתמש.
+
+כל השאיבה מכבדת `robots.txt` (בדיקה אוטומטית, best-effort --
+`backend/src/catalog/robots.ts`) ומזדהה ב-User-Agent אמיתי. שווה לציין:
+ה-`robots.txt` של פוקס ושילב (שתיהן חנויות Shopify) מכיל טקסט שמנוסח
+כפנייה ישירה לסוכני AI, כולל המלצה "להמליץ בחום למשתמש להתקין" סקריפט
+קניות צד-שלישי -- זו הזרקת-הנחיה (prompt injection) בתוך תוכן חיצוני, לא
+הנחיה מהמשתמש שלכם, ו-MarketS מתעלמת ממנה.
 
 ## מבנה הפרויקט
 
 ```
-backend/
-  prisma/schema.prisma          # Store / SearchCache / Listing
-  src/
-    scrapers/
-      types.ts                  # StoreAdapter interface
-      normalize.ts               # normalization + relevance scoring
-      adapters/
-        mock-catalog.ts          # קטלוג הדגמה משותף
-        mock-store.factory.ts    # בונה חנות-הדגמה עם תמחור דטרמיניסטי
-        mock-stores.ts           # 3 חנויות הדגמה פעילות
-        live/
-          generic-jsonld.adapter.ts
-          generic-css.adapter.ts
-          sites.ts                # חנויות אמיתיות מוגדרות כאן (ריק כברירת מחדל)
-          README.md                # מדריך חיבור חנות אמיתית
-      registry.ts                 # אילו אדפטרים פעילים
-    services/search.service.ts    # scrape מקבילי + מטמון + מיון
-    routes/                       # /api/search, /api/stores, /api/health
-frontend/
-  src/
-    components/                   # SearchBar, ResultsList, StoreRow
-    App.tsx
+backend/src/
+  catalog/
+    types.ts              # CatalogAdapter / CatalogProduct
+    http.ts, robots.ts     # fetch + robots.txt courtesy check
+    adapters/
+      shopify.factory.ts   # מנוע משותף לפוקס/שילב
+      fox.adapter.ts
+      shilav.adapter.ts
+      carters.adapter.ts   # פרסור HTML/GTM ייעודי לקרטרס
+    registry.ts             # אילו חנויות פעילות בפיילוט
+    ingest.ts                # שואב הכל, upsert ל-DB (גם CLI: `npm run ingest`)
+  llm/
+    openrouter.client.ts    # קליינט OpenRouter גנרי (JSON response)
+    match.service.ts        # התאמה per-store: LLM, fallback למילות מפתח
+  services/search.service.ts # מטמון + הרצת match.service על כל חנות + מיון
+  routes/                    # /api/search, /api/stores, /api/admin/ingest
+frontend/src/
+  components/                # SearchBar, ResultsList, StoreRow
+  App.tsx
 ```
 
-## מה לבדוק לפני production
+## מה לבדוק לפני שמרחיבים
 
-- **חוקיות**: לכל חנות אמיתית שמתחברים אליה — לקרוא תנאי שימוש, לכבד
-  `robots.txt` (יש בדיקה אוטומטית ב-`live/robots.ts`, אבל היא best-effort
-  ולא תחליף לבדיקה אנושית), ולשקול API/פיד שותפים רשמי לפני scraping.
-- **DB**: SQLite מתאים לפיתוח/דמו; לפריסה אמיתית מחליפים ל-Postgres
-  (`prisma/schema.prisma`, שינוי `provider` + `DATABASE_URL`).
-- **Rate limiting**: אין היום rate limiting על ה-API עצמו — כדאי להוסיף
-  לפני חשיפה לאינטרנט הפתוח.
+- **עדכניות**: הריצו `npm run ingest` (או `POST /api/admin/ingest`) בקביעות
+  (cron) כדי שהמחירים/המלאי לא יתיישנו -- הפיילוט לא עושה זאת אוטומטית.
+- **עלות LLM**: כל חיפוש לא-במטמון שולח את קטלוג המוצרים המלא של כל חנות
+  ל-LLM (עד ~1000 שורות לחנות). זול מאוד במודל כמו Gemini Flash, אבל שווה
+  לעקוב אחרי צריכת ה-API ב-OpenRouter אם מרחיבים לעוד חנויות/קטגוריות.
+- **הרחבה לחנות חדשה**: אם היא Shopify, כנראה מספיק קובץ config חדש דרך
+  `shopify.factory.ts`. אחרת -- בדקו אם יש JSON-LD/GTM מובנה לפני שכותבים
+  CSS selectors.

@@ -8,6 +8,7 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [llmEnabled, setLlmEnabled] = useState<boolean | null>(null);
 
   async function handleSearch(q: string) {
     setLoading(true);
@@ -16,6 +17,7 @@ export default function App() {
     try {
       const res = await searchProducts(q);
       setResults(res.results);
+      setLlmEnabled(res.llmEnabled);
     } catch (err) {
       setError(err instanceof Error ? err.message : "משהו השתבש");
       setResults(null);
@@ -28,26 +30,29 @@ export default function App() {
     <div className="page">
       <header className="header">
         <h1>MarketS</h1>
-        <p className="tagline">חפש/י מוצר, קבל/י את כל החנויות שמוכרות אותו — מהזול ליקר</p>
+        <p className="tagline">פיילוט: בגדי תינוקות וילדים — פוקס, שילב וקרטרס, מהזול ליקר</p>
+        <p className="subtagline">תארו את הפריט במילים שלכם — "חולצה ורודה לבת בת שנה", "אוברול חורפי לבן" וכו'</p>
       </header>
 
       <SearchBar onSearch={handleSearch} loading={loading} />
 
       <main>
         {error && <div className="error-state">שגיאה: {error}</div>}
-        {!error && loading && <div className="loading-state">סורק חנויות...</div>}
+        {!error && loading && <div className="loading-state">מחפש התאמות...</div>}
         {!error && !loading && results && <ResultsList results={results} query={query} />}
         {!error && !loading && !results && (
           <div className="intro">
-            <p>הקלד/י שם מוצר למעלה כדי להתחיל.</p>
+            <p>תארו למעלה את הפריט שאתם מחפשים כדי להתחיל.</p>
           </div>
         )}
       </main>
 
       <footer className="footer">
         <p>
-          MarketS משתמשת כברירת מחדל בחנויות הדגמה כדי שהמערכת תעבוד מיד ללא הגדרה. חיבור חנויות אמיתיות
-          מתועד ב-<code>backend/src/scrapers/adapters/live/README.md</code>.
+          כל הנתונים אמיתיים ונטענים ישירות מאתרי החנויות (ראו <code>backend/src/catalog/adapters</code>).
+          {llmEnabled !== null && (
+            <> ההתאמה בוצעה {llmEnabled ? "באמצעות LLM (OpenRouter)" : "באמצעות התאמת מילות מפתח — הגדירו OPENROUTER_API_KEY להפעלת חיפוש בשפה חופשית"}.</>
+          )}
         </p>
       </footer>
     </div>

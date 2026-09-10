@@ -8,9 +8,25 @@ function bool(value: string | undefined, fallback: boolean): boolean {
 export const env = {
   port: Number(process.env.PORT ?? 4000),
   searchCacheTtlMinutes: Number(process.env.SEARCH_CACHE_TTL_MINUTES ?? 30),
-  enableLiveScrapers: bool(process.env.ENABLE_LIVE_SCRAPERS, false),
   corsOrigin: (process.env.CORS_ORIGIN ?? "http://localhost:5173")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
+
+  // OpenRouter (https://openrouter.ai) powers free-text product matching.
+  // Without a key, search falls back to plain keyword overlap -- still
+  // functional, just less forgiving of paraphrasing.
+  openRouterApiKey: process.env.OPENROUTER_API_KEY ?? "",
+  openRouterModel: process.env.OPENROUTER_MODEL ?? "google/gemini-2.5-flash",
+  get llmEnabled() {
+    return this.openRouterApiKey.length > 0;
+  },
+
+  // Safety cap on catalog ingestion, so a misbehaving store (or a config
+  // mistake) can't make `npm run ingest` crawl forever.
+  ingestMaxPagesPerSource: Number(process.env.INGEST_MAX_PAGES_PER_SOURCE ?? 2),
+
+  // Optional shared secret for POST /api/admin/ingest. Leave unset for
+  // local/dev use.
+  adminToken: process.env.ADMIN_TOKEN ?? "",
 };

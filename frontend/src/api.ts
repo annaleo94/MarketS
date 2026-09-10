@@ -12,6 +12,7 @@ export interface SearchResultItem {
   url: string;
   imageUrl: string | null;
   inStock: boolean;
+  matchReason: string;
 }
 
 export interface SearchResponse {
@@ -19,6 +20,7 @@ export interface SearchResponse {
   normalizedQuery: string;
   fetchedAt: string;
   cached: boolean;
+  llmEnabled: boolean;
   results: SearchResultItem[];
 }
 

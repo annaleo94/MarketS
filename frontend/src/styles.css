@@ -44,6 +44,12 @@ body {
   margin: 0;
 }
 
+.subtagline {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 6px 0 0;
+}
+
 .search-bar {
   display: flex;
   gap: 8px;
@@ -154,16 +160,17 @@ body {
   text-overflow: ellipsis;
 }
 
+.store-row__reason {
+  color: var(--primary-dark);
+  font-size: 0.78rem;
+  margin-top: 2px;
+}
+
 .badge {
   font-size: 0.7rem;
   padding: 2px 8px;
   border-radius: 999px;
   font-weight: 600;
-}
-
-.badge--demo {
-  background: #eef2ff;
-  color: #4338ca;
 }
 
 .badge--cheapest {

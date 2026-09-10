@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export const SCRAPER_USER_AGENT =
-  "MarketS-PriceBot/0.1 (+price comparison research; contact: repo issues)";
+  "MarketS-PriceBot/0.1 (+baby/kids clothing price-comparison pilot; contact: repo issues)";
 
 interface RobotsRule {
   disallow: string[];
@@ -11,9 +11,11 @@ const robotsCache = new Map<string, RobotsRule>();
 
 // Best-effort robots.txt check for our user-agent (falling back to "*").
 // Fails open (returns true = allowed) if robots.txt can't be fetched or
-// parsed -- this is a courtesy check, not a legal opinion. Always confirm
-// a site's actual Terms of Service before scraping it in production; see
-// backend/src/scrapers/adapters/live/README.md.
+// parsed -- this is a courtesy check, not a legal opinion. We only ever
+// hit endpoints each store's own front-end already calls publicly
+// (Shopify's /products.json, a store's own category pages) and cache
+// aggressively (see ingest.ts), but always confirm a site's Terms of
+// Service too before crawling it in production.
 export async function isAllowedByRobots(targetUrl: string): Promise<boolean> {
   const url = new URL(targetUrl);
   const origin = url.origin;

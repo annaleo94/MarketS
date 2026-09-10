@@ -18,10 +18,10 @@ export function StoreRow({ item, rank, isCheapest }: Props) {
       <div className="store-row__info">
         <div className="store-row__store-name">
           {item.store.name}
-          {!item.store.isLive && <span className="badge badge--demo">הדגמה</span>}
           {isCheapest && <span className="badge badge--cheapest">הכי זול</span>}
         </div>
         <div className="store-row__title">{item.title}</div>
+        {item.matchReason && <div className="store-row__reason">{item.matchReason}</div>}
         <div className={`store-row__stock ${item.inStock ? "in-stock" : "out-of-stock"}`}>
           {item.inStock ? "במלאי" : "אזל מהמלאי"}
         </div>

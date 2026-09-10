@@ -13,43 +13,49 @@ datasource db {
 }
 
 model Store {
-  id        String   @id @default(cuid())
-  key       String   @unique // matches the adapter's `key`, e.g. "ksp", "mock-electro-il"
+  id        String    @id @default(cuid())
+  key       String    @unique // matches the adapter's `key`, e.g. "fox", "shilav"
   name      String
   baseUrl   String
   logoUrl   String?
-  isLive    Boolean  @default(false) // true = real scraper against a live site, false = demo/mock data
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  listings  Listing[]
+  isLive    Boolean   @default(true) // true = real store data, false = demo/mock data
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  products  Product[]
 }
 
-// One row per distinct search string we've already scraped, so repeat
-// searches within the TTL window are served from the DB instead of
-// re-hitting every store.
+// The indexed catalog: one row per product we've ingested from a store's
+// baby/kids-clothing category. Populated by `npm run ingest`
+// (backend/src/catalog/ingest.ts), not per-search -- search reads this
+// table instead of hitting stores live on every request.
+model Product {
+  id         String   @id @default(cuid())
+  storeId    String
+  store      Store    @relation(fields: [storeId], references: [id])
+  externalId String   // the store's own product id/handle
+  title      String
+  price      Float
+  currency   String   @default("ILS")
+  url        String
+  imageUrl   String?
+  category   String?
+  inStock    Boolean  @default(true)
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  @@unique([storeId, externalId])
+  @@index([storeId])
+}
+
+// One row per distinct free-text search we've already resolved, so
+// repeat searches within the TTL window skip re-querying the LLM.
+// `resultsJson` holds the final, already-sorted SearchResultItem[]
+// (see backend/src/services/search.service.ts) -- small and read-mostly,
+// so a JSON blob is simpler here than a relational join table.
 model SearchCache {
   id              String   @id @default(cuid())
   normalizedQuery String   @unique
   rawQuery        String
+  resultsJson     String
   fetchedAt       DateTime @default(now())
-  listings        Listing[]
-}
-
-model Listing {
-  id            String      @id @default(cuid())
-  storeId       String
-  store         Store       @relation(fields: [storeId], references: [id])
-  searchCacheId String
-  searchCache   SearchCache @relation(fields: [searchCacheId], references: [id], onDelete: Cascade)
-  title         String
-  price         Float
-  currency      String      @default("ILS")
-  url           String
-  imageUrl      String?
-  inStock       Boolean     @default(true)
-  matchScore    Float       @default(0) // how well `title` matches the search query, 0..1
-  scrapedAt     DateTime    @default(now())
-
-  @@index([searchCacheId])
-  @@index([storeId])
 }
