@@ -56,6 +56,12 @@ export function Results({ data, onDropFilter }: Props) {
         </button>
       </div>
 
+      {data.widenedToCategory && data.totalCount > 0 && (
+        <p className="notice">
+          לא נמצאו פריטים בדיוק בסוג שביקשתם, אז הרחבנו ל"{data.widenedToCategory}".
+        </p>
+      )}
+
       {data.showingAlternatives && data.totalCount > 0 && (
         <p className="notice">
           לא נמצא פריט בצבע שביקשתם. אלה הפריטים הקרובים ביותר, בצבעים אחרים.

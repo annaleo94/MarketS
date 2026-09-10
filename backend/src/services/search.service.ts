@@ -1,7 +1,7 @@
 import { prisma } from "../db/prisma";
 import { normalizeQuery, relevanceScore } from "../scrapers/normalize";
 import { parseQuery, ParsedQuery } from "../search/parse-query";
-import { categoryWithDescendants, categoryLabel } from "../catalog/taxonomy";
+import { categoryWithDescendants, categoryAncestors, categoryLabel } from "../catalog/taxonomy";
 import { productHasSize } from "../catalog/sizes";
 import { productColors } from "../catalog/colors";
 import { env } from "../env";
@@ -46,6 +46,9 @@ export interface SearchResponse {
   // True when nothing was found in the colour asked for, so what's listed
   // are near-misses rather than answers. The UI says so.
   showingAlternatives: boolean;
+  // Set when the exact garment type asked for had nothing and the search
+  // climbed to a broader one; holds that broader category's label.
+  widenedToCategory: string | null;
 }
 
 const GENDER_LABELS: Record<string, string> = { girls: "בנות", boys: "בנים", unisex: "יוניסקס" };
@@ -93,12 +96,15 @@ export async function search(rawQuery: string, overrides?: Partial<ParsedQuery>)
   return response;
 }
 
-async function runSearch(rawQuery: string, normalizedQuery: string, parsed: ParsedQuery): Promise<SearchResponse> {
-  const stores = await prisma.store.findMany({ where: { active: true }, orderBy: { name: "asc" } });
+interface ScoredEntry {
+  product: Awaited<ReturnType<typeof prisma.product.findMany>>[number];
+  score: number;
+  colorMatch: ColorMatch;
+}
 
-  // --- Hard filters. Anything failing these is removed, not down-ranked:
-  // no relevance score compensates for the wrong garment, size or gender.
-  const categorySlugs = parsed.categorySlug ? categoryWithDescendants(parsed.categorySlug) : null;
+// The hard filters plus scoring, for one category slug (or none).
+async function scoreCandidates(parsed: ParsedQuery, categorySlug: string | null): Promise<ScoredEntry[]> {
+  const categorySlugs = categorySlug ? categoryWithDescendants(categorySlug) : null;
 
   const candidates = await prisma.product.findMany({
     where: {
@@ -112,10 +118,39 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
   const sizeFiltered = parsed.size ? candidates.filter((p) => productHasSize(p.sizes, parsed.size!)) : candidates;
 
   // --- Soft signals. These only order what survived above.
-  const scored = sizeFiltered
+  return sizeFiltered
     .map((product) => ({ product, score: scoreProduct(product, parsed), colorMatch: colorMatchFor(product, parsed.color) }))
     .filter((entry) => entry.score >= env.searchMinScore)
     .sort((a, b) => b.score - a.score);
+}
+
+async function runSearch(rawQuery: string, normalizedQuery: string, parsed: ParsedQuery): Promise<SearchResponse> {
+  const stores = await prisma.store.findMany({ where: { active: true }, orderBy: { name: "asc" } });
+
+  // --- Hard filters. Anything failing these is removed, not down-ranked:
+  // no relevance score compensates for the wrong garment, size or gender.
+  //
+  // Most products are classified from the store's own category label, which
+  // is coarse: TerminalX files every swimsuit, bikini and rash guard alike
+  // under "בגדי ים". So an exact search for a child category can match
+  // nothing at all while the parent holds hundreds -- "בגד ים שלם מידה 3"
+  // returned zero next to 79 for "בגד ים מידה 3". A product sitting at the
+  // parent isn't known *not* to be a swimsuit, so rather than show an empty
+  // page we climb to the nearest ancestor that has anything, and say so.
+  const attempts = parsed.categorySlug
+    ? [parsed.categorySlug, ...categoryAncestors(parsed.categorySlug)]
+    : [null];
+
+  let scored: ScoredEntry[] = [];
+  let usedCategory: string | null = parsed.categorySlug;
+
+  for (const slug of attempts) {
+    scored = await scoreCandidates(parsed, slug);
+    usedCategory = slug;
+    if (scored.length > 0) break;
+  }
+
+  const widenedToCategory = usedCategory !== parsed.categorySlug ? usedCategory : null;
 
   // Asked for a colour, and something actually comes in it? Then a garment
   // in a different colour is simply a wrong answer, and is dropped -- the
@@ -169,10 +204,11 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
     fetchedAt: new Date().toISOString(),
     cached: false,
     llmEnabled: env.llmEnabled,
-    filters: describeFilters(parsed),
+    filters: describeFilters(parsed, usedCategory),
     stores: storeResults,
     totalCount: visible.length,
     showingAlternatives,
+    widenedToCategory: widenedToCategory ? categoryLabel(widenedToCategory) : null,
   };
 }
 
@@ -214,9 +250,12 @@ function scoreProduct(
   return Math.max(0, Math.min(1.5, score));
 }
 
-function describeFilters(parsed: ParsedQuery): AppliedFilter[] {
+// The category chip shows what was actually searched, which after a widen
+// is the broader one -- promising "בגד ים שלם" over a list of swimwear
+// generally would be a chip that lies about its own results.
+function describeFilters(parsed: ParsedQuery, usedCategory: string | null): AppliedFilter[] {
   const filters: AppliedFilter[] = [];
-  if (parsed.categorySlug) filters.push({ kind: "category", label: categoryLabel(parsed.categorySlug) });
+  if (usedCategory) filters.push({ kind: "category", label: categoryLabel(usedCategory) });
   if (parsed.size) {
     filters.push({ kind: "size", label: parsed.sizeLabel ?? `${parsed.size.min}-${parsed.size.max} חודשים` });
   }
@@ -230,7 +269,7 @@ function describeFilters(parsed: ParsedQuery): AppliedFilter[] {
 // would go on serving the old one until the TTL ran out, quietly missing
 // the new fields. Bump this whenever either changes; old entries then miss
 // and are rewritten rather than being served half-formed.
-const RESULTS_SCHEMA_VERSION = 3;
+const RESULTS_SCHEMA_VERSION = 4;
 
 function buildCacheKey(normalizedQuery: string, overrides?: Partial<ParsedQuery>): string {
   const base = `v${RESULTS_SCHEMA_VERSION}:${normalizedQuery}`;
@@ -250,6 +289,7 @@ function emptyResponse(rawQuery: string, normalizedQuery: string): SearchRespons
     stores: [],
     totalCount: 0,
     showingAlternatives: false,
+    widenedToCategory: null,
   };
 }
 

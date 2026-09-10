@@ -61,6 +61,21 @@ export function categoryWithDescendants(slug: string): string[] {
   return result;
 }
 
+// The chain above `slug`, nearest first. A product classified as plain
+// "swimwear" isn't known not to be a swimsuit -- it only means nobody was
+// more specific, which is the usual case when the category came from a
+// store's own coarse label. So a search for a child that finds nothing can
+// climb here rather than show an empty page.
+export function categoryAncestors(slug: string): string[] {
+  const chain: string[] = [];
+  let node = BY_SLUG.get(slug);
+  while (node?.parent) {
+    chain.push(node.parent);
+    node = BY_SLUG.get(node.parent);
+  }
+  return chain;
+}
+
 export function categoryLabel(slug: string): string {
   return BY_SLUG.get(slug)?.label ?? slug;
 }

@@ -83,15 +83,28 @@ export async function parseQuery(raw: string): Promise<ParsedQuery> {
       ? { min: response.ageMonths, max: response.ageMonths + 3 }
       : local.size;
 
+  const color = response.color ? colorFromTitle(response.color) ?? local.color : local.color;
+
   return {
     categorySlug: category,
     size,
     sizeLabel: size ? local.sizeLabel ?? `${size.min} חודשים` : null,
-    gender: normalizeGender(response.gender) ?? local.gender,
-    color: response.color ? colorFromTitle(response.color) ?? local.color : local.color,
+    gender: resolveGender(raw, normalizeGender(response.gender) ?? local.gender, color),
+    color,
     style: response.style ?? null,
     semanticQuery: response.semanticQuery?.trim() || raw,
   };
+}
+
+// "לבנות" is both "white (fem. pl.)" and "for girls", and the model happily
+// reads it as both at once -- "בגד ים שלם לבנות מידה 3" came back with
+// colour=לבן *and* gender=בנות, two hard cuts from one ambiguous word, and
+// no results. One word may only mean one thing: when white was taken from
+// it and nothing else in the query says girls, the colour reading wins.
+function resolveGender(raw: string, gender: Gender | null, color: string | null): Gender | null {
+  if (gender !== "girls" || color !== "לבן") return gender;
+  const saysGirlsUnambiguously = genderFromQuery(raw) === "girls";
+  return saysGirlsUnambiguously ? "girls" : null;
 }
 
 function normalizeGender(raw: string | null | undefined): Gender | null {
