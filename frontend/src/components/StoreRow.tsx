@@ -23,6 +23,7 @@ export function StoreRow({ item, rank, isCheapest }: Props) {
         </div>
         <div className="store-row__title">{item.title}</div>
         {item.matchReason && <div className="store-row__reason">{item.matchReason}</div>}
+        {item.sizes && <div className="store-row__sizes">מידות: {item.sizes.split(",").join(" · ")}</div>}
         <div className={`store-row__stock ${item.inStock ? "in-stock" : "out-of-stock"}`}>
           {item.inStock ? "במלאי" : "אזל מהמלאי"}
         </div>

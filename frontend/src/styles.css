@@ -166,6 +166,12 @@ body {
   margin-top: 2px;
 }
 
+.store-row__sizes {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
 .badge {
   font-size: 0.7rem;
   padding: 2px 8px;

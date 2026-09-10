@@ -44,6 +44,7 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
           imageUrl: p.imageUrl,
           category: p.category,
           inStock: p.inStock ?? true,
+          sizes: p.sizes?.join(",") ?? null,
         },
         create: {
           storeId: store.id,
@@ -55,6 +56,7 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
           imageUrl: p.imageUrl,
           category: p.category,
           inStock: p.inStock ?? true,
+          sizes: p.sizes?.join(",") ?? null,
         },
       });
     }

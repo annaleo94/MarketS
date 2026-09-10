@@ -8,6 +8,7 @@ export interface CatalogProduct {
   imageUrl?: string;
   category?: string;
   inStock?: boolean;
+  sizes?: string[];
 }
 
 // A store integration for the catalog pilot. Unlike a "search this store"

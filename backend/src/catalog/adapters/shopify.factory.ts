@@ -11,12 +11,18 @@ interface ShopifyImage {
   src: string;
 }
 
+interface ShopifyOption {
+  name: string;
+  values: string[];
+}
+
 interface ShopifyProduct {
   id: number;
   title: string;
   handle: string;
   images: ShopifyImage[];
   variants: ShopifyVariant[];
+  options?: ShopifyOption[];
 }
 
 interface ShopifyProductsResponse {
@@ -86,5 +92,6 @@ function toCatalogProduct(p: ShopifyProduct, config: ShopifyStoreConfig): Catalo
     imageUrl: p.images[0]?.src,
     category: config.category,
     inStock: inStockVariants.length > 0,
+    sizes: p.options?.find((o) => /size|מידה/i.test(o.name))?.values,
   };
 }

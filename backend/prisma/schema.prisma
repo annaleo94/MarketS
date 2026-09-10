@@ -47,6 +47,9 @@ model Product {
   // so colour searches can reach that inventory too. See catalog/colors.ts.
   color       String?
   colorSource String? // "title" | "vision"
+  // Comma-separated size labels as the store lists them ("3M,6M,12M" or
+  // "2,3,4"), so an age/size in the query can be matched against stock.
+  sizes       String?
   // False for colour-blocked/patterned garments, where a single colour name
   // is misleading -- a cream shirt with mustard sleeves is not what someone
   // asking for a white shirt means. Null when unknown.

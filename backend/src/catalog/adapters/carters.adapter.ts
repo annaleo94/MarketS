@@ -42,11 +42,23 @@ export const cartersAdapter: CatalogAdapter = {
   },
 };
 
+// Sizes come from the configurable-product payload the theme hands to its
+// size selector -- one `"code":"size"` section per card, in the same order
+// as the cards themselves, so each product takes the first section that
+// follows it. The option entries are matched individually because the
+// array can't be delimited by its closing bracket: every entry contains a
+// nested `"products":[...]` array of its own.
+const SIZE_SECTION_RE = /"code":"size"/g;
+const SIZE_OPTION_RE = /"id":"\d+","label":"([^"]+)","products":/g;
+
 function extractProducts(html: string): CatalogProduct[] {
+  const sizeSectionStarts = [...html.matchAll(SIZE_SECTION_RE)].map((m) => m.index!);
+
   const results: CatalogProduct[] = [];
   for (const match of html.matchAll(PRODUCT_BLOCK_RE)) {
     const [, imageUrl, href, onclickRaw, titleRaw] = match;
     const onclick = decodeHtmlEntities(onclickRaw);
+    const sizes = sizesAfter(html, sizeSectionStarts, match.index!);
 
     const idMatch = onclick.match(/"id":"(\d+)"/);
     const priceMatch = onclick.match(/"price":"([\d.]+)"/);
@@ -64,9 +76,19 @@ function extractProducts(html: string): CatalogProduct[] {
       imageUrl,
       category: "בגדי תינוקות וילדים",
       inStock: true,
+      sizes,
     });
   }
   return results;
+}
+
+function sizesAfter(html: string, sectionStarts: number[], productIndex: number): string[] | undefined {
+  const start = sectionStarts.find((i) => i > productIndex);
+  if (start === undefined) return undefined;
+  const end = sectionStarts.find((i) => i > start) ?? html.length;
+
+  const labels = [...html.slice(start, end).matchAll(SIZE_OPTION_RE)].map((m) => m[1]);
+  return labels.length > 0 ? labels : undefined;
 }
 
 function decodeHtmlEntities(text: string): string {

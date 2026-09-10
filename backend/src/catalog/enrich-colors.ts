@@ -3,6 +3,8 @@ import { completeJsonAboutImage } from "../llm/openrouter.client";
 import { colorFromTitle, normalizeColorName, CANONICAL_COLORS } from "./colors";
 import { env } from "../env";
 
+const VISION_CONCURRENCY = 5;
+
 // Fills in Product.color so colour searches can reach stores that publish
 // none (Fox lists 242 shirts without a single colour anywhere in its feed).
 // Titles are parsed for free; only what's left over costs a vision call,
@@ -36,14 +38,22 @@ export async function enrichColors(): Promise<{ fromTitle: number; fromVision: n
     // doesn't turn into one enormous bill or a half-hour job -- later runs
     // pick up where this one stopped.
     const batch = needsVision.slice(0, env.ingestMaxVisionCalls);
-    for (const product of batch) {
-      const detected = await detectColorFromImage(product.imageUrl!);
-      if (!detected) continue;
-      await prisma.product.update({
-        where: { id: product.id },
-        data: { color: detected.color, colorSource: "vision", colorIsSolid: detected.isSolid },
-      });
-      fromVision += 1;
+
+    // A few at a time: one-by-one leaves a whole catalogue's backlog taking
+    // hours, while firing everything at once trips the provider's in-flight
+    // spend cap and loses whole chunks of the batch to 402s.
+    for (let i = 0; i < batch.length; i += VISION_CONCURRENCY) {
+      const slice = batch.slice(i, i + VISION_CONCURRENCY);
+      const detected = await Promise.all(slice.map((p) => detectColorFromImage(p.imageUrl!)));
+
+      for (const [j, result] of detected.entries()) {
+        if (!result) continue;
+        await prisma.product.update({
+          where: { id: slice[j].id },
+          data: { color: result.color, colorSource: "vision", colorIsSolid: result.isSolid },
+        });
+        fromVision += 1;
+      }
     }
   }
 

@@ -14,6 +14,7 @@ export interface SearchResultItem {
   inStock: boolean;
   matchReason: string;
   isExact: boolean;
+  sizes: string | null;
 }
 
 export interface SearchResponse {

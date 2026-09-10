@@ -15,6 +15,7 @@ export interface CatalogEntry {
   inStock: boolean;
   color: string | null;
   colorIsSolid: boolean | null;
+  sizes: string | null;
 }
 
 export interface MatchResult {
@@ -131,7 +132,8 @@ async function matchWithLlm(rawQuery: string, products: CatalogEntry[]): Promise
   const catalogLines = products
     .map((p) => {
       const color = p.color ? ` | צבע: ${p.color}${p.colorIsSolid === false ? " (רב-צבעוני)" : ""}` : "";
-      return `${p.id} | ${p.title}${color} | ₪${p.price}`;
+      const sizes = p.sizes ? ` | מידות: ${p.sizes}` : "";
+      return `${p.id} | ${p.title}${color}${sizes} | ₪${p.price}`;
     })
     .join("\n");
 
@@ -143,6 +145,8 @@ async function matchWithLlm(rawQuery: string, products: CatalogEntry[]): Promise
         "המוצר שהכי מתאים לתיאור החיפוש של הלקוח -- גם אם הניסוח שונה מהכותרת (מילים נרדפות, תיאור כללי, סדר " +
         'מילים שונה, שפה חופשית). התחשב בסוג הפריט (חולצה/מכנסיים/אוברול/בגד ים וכו\'), בצבע (מופיע בשדה "צבע" ' +
         "כשהוא ידוע), במגדר ובגיל -- אם צוינו. " +
+        'אם הלקוח ציין גיל או מידה, בדוק שהיא קיימת בשדה "מידות" (למשל 3M/6M/12M/24M לחודשים, או 2/3/4/5 לשנים); ' +
+        "מוצר שאין לו את המידה המבוקשת אינו התאמה מדויקת. " +
         'סווג את ההתאמה: "exact" אם המוצר הוא באמת מה שהלקוח ביקש (אותו סוג פריט וגם הצבע שביקש, אם ביקש צבע); ' +
         '"alternative" אם זה הדבר הקרוב ביותר בחנות אבל לא בדיוק מה שביקש (למשל בגד גוף במקום חולצה). ' +
         "אל תבחר מוצר בצבע אחר מזה שהלקוח ביקש -- במקרה כזה עדיף להחזיר null. " +
@@ -154,7 +158,7 @@ async function matchWithLlm(rawQuery: string, products: CatalogEntry[]): Promise
     },
     {
       role: "user",
-      content: `תיאור החיפוש של הלקוח: "${rawQuery}"\n\nמוצרים זמינים בחנות (מזהה | כותרת | צבע | מחיר):\n${catalogLines}`,
+      content: `תיאור החיפוש של הלקוח: "${rawQuery}"\n\nמוצרים זמינים בחנות (מזהה | כותרת | צבע | מידות | מחיר):\n${catalogLines}`,
     },
   ]);
 
