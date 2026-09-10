@@ -17,6 +17,7 @@ export interface SearchResultItem {
   sizes: string | null;
   color: string | null;
   colors: string[]; // every colour in the listing -- more than one for a multipack
+  colorMatch: ColorMatch;
   categorySlug: string | null;
   gender: string;
   score: number;
@@ -45,6 +46,29 @@ export interface SearchResponse {
 }
 
 const GENDER_LABELS: Record<string, string> = { girls: "בנות", boys: "בנים", unisex: "יוניסקס" };
+
+// How an item answers the colour the shopper asked for. Colour stays a soft
+// signal -- nothing is deleted for it -- but it decides the order, because
+// price-sorting the whole set alone put a ₪9.9 grey bodysuit above every
+// white shirt in a search for a white shirt.
+//   exact   - the garment is that colour
+//   pack    - a multipack that includes it, or a colour-blocked garment
+//   unknown - no colour on record, so we can't say either way
+//   other   - a colour we know, and it isn't the one asked for
+export type ColorMatch = "exact" | "pack" | "unknown" | "other";
+
+const COLOR_MATCH_RANK: Record<ColorMatch, number> = { exact: 0, pack: 1, unknown: 2, other: 3 };
+
+function colorMatchFor(
+  product: { color: string | null; colors: string | null; colorIsSolid: boolean | null },
+  wanted: string | null
+): ColorMatch {
+  if (!wanted) return "exact"; // nothing asked for, so nothing to fall short of
+  const colors = productColors(product);
+  if (colors.length === 0) return "unknown";
+  if (!colors.includes(wanted)) return "other";
+  return colors.length === 1 && product.colorIsSolid !== false ? "exact" : "pack";
+}
 
 export async function search(rawQuery: string, overrides?: Partial<ParsedQuery>): Promise<SearchResponse> {
   const normalizedQuery = normalizeQuery(rawQuery);
@@ -104,6 +128,7 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
       sizes: product.sizes,
       color: product.color,
       colors: productColors(product),
+      colorMatch: colorMatchFor(product, parsed.color),
       categorySlug: product.categorySlug,
       gender: product.gender,
       score,
@@ -115,7 +140,7 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
   // shows the shopper we actually looked there, rather than leaving them
   // to wonder whether the store was searched at all.
   const storeResults: StoreResults[] = stores.map((store) => {
-    const items = (byStore.get(store.id) ?? []).sort((a, b) => a.price - b.price);
+    const items = (byStore.get(store.id) ?? []).sort(compareForDisplay);
     return {
       store: { key: store.key, name: store.name, baseUrl: store.baseUrl, logoUrl: store.logoUrl },
       count: items.length,
@@ -135,6 +160,16 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
   };
 }
 
+// Cheapest-first is the whole point of the tool, but only among items that
+// actually answer the request: a shopper asking for a white shirt wants the
+// cheapest *white* one, not the cheapest thing that happens to be a shirt.
+// So colour tier leads and price sorts within it -- the near-misses are
+// still there, listed after, and marked in the UI.
+export function compareForDisplay(a: SearchResultItem, b: SearchResultItem): number {
+  const tier = COLOR_MATCH_RANK[a.colorMatch] - COLOR_MATCH_RANK[b.colorMatch];
+  return tier !== 0 ? tier : a.price - b.price;
+}
+
 // Ranking only. A colour or style mismatch pushes an item down the list;
 // it never removes it, because the shopper may well still want it.
 function scoreProduct(
@@ -143,25 +178,21 @@ function scoreProduct(
 ): number {
   let score = relevanceScore(parsed.semanticQuery, product.title);
 
-  if (parsed.color) {
-    const colors = productColors(product);
-    if (colors.includes(parsed.color)) {
-      // Best when the whole garment is that colour. A multipack containing
-      // one white bodysuit among three, or a colour-blocked shirt, does get
-      // the shopper the colour they asked for -- just not an item that is
-      // wholly it -- so it ranks below a plain white one rather than beside it.
-      const wholly = colors.length === 1 && product.colorIsSolid !== false;
-      score += wholly ? 0.6 : 0.3;
-    } else if (colors.length > 0) score -= 0.2;
-  }
-
-  if (parsed.style && relevanceScore(parsed.style, product.title) > 0.5) score += 0.2;
-
   // Once the hard filters have guaranteed the garment type, a low text
   // score only means the wording differed from the listing -- so give the
   // survivors a floor instead of letting the threshold empty out a set
-  // that is already known to be the right kind of product.
+  // that is already known to be the right kind of product. Applied before
+  // the soft signals below, which would otherwise be silently erased by it.
   if (parsed.categorySlug) score = Math.max(score, 0.5);
+
+  if (parsed.color) {
+    const match = colorMatchFor(product, parsed.color);
+    if (match === "exact") score += 0.6;
+    else if (match === "pack") score += 0.3;
+    else if (match === "other") score -= 0.2;
+  }
+
+  if (parsed.style && relevanceScore(parsed.style, product.title) > 0.5) score += 0.2;
 
   return Math.max(0, Math.min(1.5, score));
 }

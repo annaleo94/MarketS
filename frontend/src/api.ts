@@ -1,3 +1,17 @@
+// How an item answers the colour that was asked for. "other" is a known
+// colour that isn't it -- shown, but marked and listed after the matches.
+export type ColorMatch = "exact" | "pack" | "unknown" | "other";
+
+const COLOR_MATCH_RANK: Record<ColorMatch, number> = { exact: 0, pack: 1, unknown: 2, other: 3 };
+
+// Mirrors the server's ordering so the flat "compare by price" view shows
+// the same items in the same order the grouped view does, just merged.
+export function compareForDisplay(a: SearchResultItem, b: SearchResultItem): number {
+  const rank = (i: SearchResultItem) => COLOR_MATCH_RANK[i.colorMatch ?? "exact"];
+  const tier = rank(a) - rank(b);
+  return tier !== 0 ? tier : a.price - b.price;
+}
+
 export interface SearchResultItem {
   id: string;
   title: string;
@@ -11,6 +25,7 @@ export interface SearchResultItem {
   // Every colour in the listing -- more than one for a multipack. Optional
   // because a search cached before this field existed won't carry it.
   colors?: string[];
+  colorMatch?: ColorMatch;
   categorySlug: string | null;
   gender: string;
   score: number;

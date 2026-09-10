@@ -24,6 +24,7 @@ export function ProductCard({ item, isCheapest }: { item: SearchResultItem; isCh
       </div>
 
       <div className="product__buy">
+        {item.colorMatch === "other" && <span className="badge badge--alternative">חלופה קרובה</span>}
         {isCheapest && <span className="badge badge--cheapest">הכי זול</span>}
         <div className="product__price">
           {symbol}

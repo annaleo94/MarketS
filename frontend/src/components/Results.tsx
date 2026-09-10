@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SearchResponse, AppliedFilter } from "../api";
+import { SearchResponse, AppliedFilter, compareForDisplay } from "../api";
 import { StoreGroup } from "./StoreGroup";
 import { ProductCard } from "./ProductCard";
 
@@ -12,7 +12,13 @@ export function Results({ data, onDropFilter }: Props) {
   const [flat, setFlat] = useState(false);
 
   const allItems = data.stores.flatMap((s) => s.items);
-  const cheapestOverall = allItems.length > 0 ? Math.min(...allItems.map((i) => i.price)) : null;
+
+  // "Cheapest" has to mean cheapest among the items that actually answer the
+  // request -- badging a grey bodysuit as the best price in a search for a
+  // white shirt would be worse than not badging anything at all.
+  const onTarget = allItems.filter((i) => i.colorMatch !== "other");
+  const priced = onTarget.length > 0 ? onTarget : allItems;
+  const cheapestOverall = priced.length > 0 ? Math.min(...priced.map((i) => i.price)) : null;
 
   return (
     <div className="results">
@@ -50,7 +56,7 @@ export function Results({ data, onDropFilter }: Props) {
       {flat ? (
         <ul className="store-group__items">
           {[...allItems]
-            .sort((a, b) => a.price - b.price)
+            .sort(compareForDisplay)
             .map((item) => (
               <ProductCard key={item.id} item={item} isCheapest={item.price === cheapestOverall} />
             ))}
