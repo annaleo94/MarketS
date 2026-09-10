@@ -4,6 +4,8 @@
 אותו (פוקס, שילב, קרטרס), ממוינת מהזול ליקר. חיפוש בשפה חופשית מופעל ע"י LLM
 דרך [OpenRouter](https://openrouter.ai).
 
+**חי באוויר:** https://itl57pbfd8a9c.box.lathe.computer
+
 ## איך זה עובד
 
 ```
@@ -99,6 +101,29 @@ frontend/src/
   components/                # SearchBar, ResultsList, StoreRow
   App.tsx
 ```
+
+## פריסה (Deployment)
+
+האפליקציה רצה כ-container אחד שמגיש גם את ה-API וגם את ה-frontend הבנוי
+(אותו origin, בלי CORS), על מכונת [Lathe](https://lathe.live) יחד עם
+ה-Postgres שלה.
+
+1. push לענף → GitHub Actions (`.github/workflows/docker-publish.yml`) בונה
+   את `Dockerfile` ודוחף ל-`ghcr.io/annaleo94/markets:latest`.
+2. `deploy_app` על ה-instance מושך את ה-image מחדש ומפעיל אותו.
+3. ה-container מריץ `prisma db push` **ברקע** ומיד מפעיל את השרת -- ראו
+   ההערה ב-`Dockerfile`: במכולה הזו Prisma לא מצליחה להרוג את תהליך-הבן
+   שלה (`kill EACCES`), ולכן `prisma db push` **תקוע לנצח אחרי** שסיים
+   את העבודה. אם מריצים אותו בטור לפני השרת -- השרת לעולם לא עולה.
+4. אם הקטלוג ריק בעליית השרת, הוא מריץ ingest אוטומטית ברקע.
+
+עדכון קטלוג/מחירים בפרודקשן:
+
+```bash
+curl -X POST https://<host>/api/admin/ingest -H "X-Admin-Token: <ADMIN_TOKEN>"
+```
+
+(זה גם מנקה את מטמון החיפושים, שמצביע על הקטלוג הישן.)
 
 ## מה לבדוק לפני שמרחיבים
 
