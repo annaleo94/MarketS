@@ -1,0 +1,17 @@
+{
+  "name": "markets",
+  "private": true,
+  "version": "0.1.0",
+  "description": "MarketS - Israeli price comparison engine: search a product, see every store that sells it, cheapest first.",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev --workspace backend",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "build": "npm run build --workspace backend && npm run build --workspace frontend",
+    "db:generate": "npm run db:generate --workspace backend",
+    "db:push": "npm run db:push --workspace backend"
+  }
+}

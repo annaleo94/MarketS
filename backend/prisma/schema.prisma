@@ -1,0 +1,55 @@
+// MarketS price-comparison database schema.
+// SQLite by default (zero-setup local/dev). Point DATABASE_URL at Postgres/MySQL
+// for a real deployment; Prisma's schema stays the same for those providers
+// (just change `provider` below and re-run `npm run db:push`).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Store {
+  id        String   @id @default(cuid())
+  key       String   @unique // matches the adapter's `key`, e.g. "ksp", "mock-electro-il"
+  name      String
+  baseUrl   String
+  logoUrl   String?
+  isLive    Boolean  @default(false) // true = real scraper against a live site, false = demo/mock data
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  listings  Listing[]
+}
+
+// One row per distinct search string we've already scraped, so repeat
+// searches within the TTL window are served from the DB instead of
+// re-hitting every store.
+model SearchCache {
+  id              String   @id @default(cuid())
+  normalizedQuery String   @unique
+  rawQuery        String
+  fetchedAt       DateTime @default(now())
+  listings        Listing[]
+}
+
+model Listing {
+  id            String      @id @default(cuid())
+  storeId       String
+  store         Store       @relation(fields: [storeId], references: [id])
+  searchCacheId String
+  searchCache   SearchCache @relation(fields: [searchCacheId], references: [id], onDelete: Cascade)
+  title         String
+  price         Float
+  currency      String      @default("ILS")
+  url           String
+  imageUrl      String?
+  inStock       Boolean     @default(true)
+  matchScore    Float       @default(0) // how well `title` matches the search query, 0..1
+  scrapedAt     DateTime    @default(now())
+
+  @@index([searchCacheId])
+  @@index([storeId])
+}

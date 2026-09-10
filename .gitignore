@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+.env
+*.log
+*.tsbuildinfo
+
+# SQLite dev database
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+
+# editors / OS
+.DS_Store
+.vscode/
+.idea/
