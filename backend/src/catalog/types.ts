@@ -10,11 +10,6 @@ export interface CatalogProduct {
   inStock?: boolean;
   sizes?: string[];
   storeGender?: string; // raw gender text from the store, if it states one
-  // Colours the store itself states, if it states any. More than one when
-  // the listing is offered in several. Whatever doesn't map onto our
-  // vocabulary is dropped, and the product falls through to the usual
-  // title-then-photo resolution (see catalog/enrich-colors.ts).
-  colors?: string[];
 }
 
 // A store integration for the catalog pilot. Unlike a "search this store"

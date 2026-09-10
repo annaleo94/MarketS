@@ -16,37 +16,7 @@ export function parseSizeLabel(raw: string): MonthRange | null {
   const label = raw.trim().toLowerCase().replace(/\s+/g, "");
   if (!label) return null;
 
-  if (/^(n\.?b\.?|newborn|ניובורן)$/.test(label)) return { min: 0, max: 3 };
-
-  // Footwear is on its own scale and must not be read as months -- checked
-  // before the range and bare-number rules below, which would both happily
-  // misread it.
-  if (isShoeSizeLabel(label)) return null;
-
-  // "2-3y", "9-10y" -- a span of years. TerminalX sizes most of its
-  // clothing this way, and without this the label parses to nothing: an
-  // item stocked in 2-3Y/3-4Y/4-5Y was dropped outright from a search for
-  // size 4, which is a hard filter deleting stock the shopper asked for.
-  const yearRange = label.match(/^(\d+)-(\d+)\s*(y|שנים)$/);
-  if (yearRange) {
-    const [, from, to] = yearRange;
-    return { min: Number(from) * YEAR, max: (Number(to) + 1) * YEAR };
-  }
-
-  // "11-12", "13-14", "2-3" -- a span of years written without the Y. The
-  // giveaway is the width: month ranges in these catalogues are always at
-  // least three wide ("0-3", "6-12", "12-18", "18-24", "12-24"), while the
-  // year ladder steps one at a time. One listing spells the whole thing
-  // out -- [12-18, 18-24, 2Y, 3Y ... 10Y, 11-12, 13-14, 15-16, 17-18] on a
-  // product titled "12M-18Y" -- so these continue the years, they don't
-  // restart the months. Read as months, "13-14" made a teen garment answer
-  // a search for a one-year-old.
-  const bareYearRange = label.match(/^(\d+)-(\d+)$/);
-  if (bareYearRange) {
-    const from = Number(bareYearRange[1]);
-    const to = Number(bareYearRange[2]);
-    if (to - from === 1 && to <= 18) return { min: from * YEAR, max: (to + 1) * YEAR };
-  }
+  if (/^(nb|newborn|ניובורן)$/.test(label)) return { min: 0, max: 3 };
 
   // "18-24m", "0-3", "3-6"
   const range = label.match(/^(\d+)-(\d+)\s*(m|מ|ח)?$/);
@@ -92,67 +62,14 @@ export function productSizeRanges(sizesCsv: string | null): MonthRange[] {
     .filter((r): r is MonthRange => r !== null);
 }
 
-// Footwear is sized on a scale of its own (EU 19-31 for this age group),
-// which says nothing about the wearer's age. Distinguishing it from a label
-// we simply couldn't read matters: an unreadable label should let a product
-// through, but a shoe sized 20-26 answering every age query is just wrong.
-export function isShoeSizeLabel(raw: string): boolean {
-  const label = raw.trim().replace(/\s+/g, "");
-
-  // "2627", "2829" -- TerminalX publishes a handful of its shoe sizes with
-  // the hyphen missing (the same feed also carries "26-27" and "28-29").
-  // Two consecutive shoe sizes run together; no clothing size is four
-  // digits. Checked before the plain-number rule below, which would
-  // otherwise read 2627 as a single number and reject it.
-  const merged = label.match(/^(\d{2})(\d{2})$/);
-  if (merged) {
-    const from = Number(merged[1]);
-    const to = Number(merged[2]);
-    if (from >= 15 && to <= 50 && to - from === 1) return true;
-  }
-
-  // "36", "23.5"
-  const single = Number(label.replace(",", "."));
-  if (Number.isFinite(single)) return single >= 15 && single <= 50;
-
-  // Half sizes written as a fraction: "351\2", "362\3", "38 2\3".
-  if (/^\d{2}[\\/]?\d?[\\/]\d$/.test(label)) return true;
-
-  // "19-21", "24-25". Ambiguous with month ranges on the face of it, but
-  // the two don't actually overlap in these catalogues: clothing months are
-  // written on a standard ladder that never starts at 19 or later
-  // ("12-18", "18-24", "24-36"), while shoe spans are narrow and start at
-  // 19 or above. Without this a sandal in 25-26 read as 25-26 *months* and
-  // answered a request for a two-year-old.
-  const span = label.match(/^(\d+)-(\d+)$/);
-  if (span) {
-    const from = Number(span[1]);
-    const to = Number(span[2]);
-    return from >= 19 && to <= 50 && to - from <= 3;
-  }
-
-  return false;
-}
-
 // Does the product actually stock something in the requested age? Products
 // whose sizes we couldn't parse at all return true -- an unreadable label
 // is missing information, and a hard filter shouldn't delete stock over
 // that (the shopper still sees the size list and can judge).
 export function productHasSize(sizesCsv: string | null, requested: MonthRange): boolean {
   const ranges = productSizeRanges(sizesCsv);
-  if (ranges.length > 0) return ranges.some((r) => rangesOverlap(r, requested));
-
-  // Nothing on the age scale. If anything here is recognisably a shoe size,
-  // the product is sized for feet and an age can't answer it -- excluding it
-  // is right, whereas the fallback below would have it match every age there
-  // is. Deliberately "any" rather than "every": requiring every label to be
-  // recognisable meant a single malformed one undid the whole exclusion, and
-  // TerminalX ships exactly that (sandals listed 21,22,23,24,25,2627,2829,
-  // 30,31 -- their own hyphens missing -- answered a search for size 2).
-  const labels = (sizesCsv ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (labels.some(isShoeSizeLabel)) return false;
-
-  return true;
+  if (ranges.length === 0) return true;
+  return ranges.some((r) => rangesOverlap(r, requested));
 }
 
 // What the shopper asked for, in months: "שנתיים", "גיל 3 חודשים",

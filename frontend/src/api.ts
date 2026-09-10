@@ -54,9 +54,6 @@ export interface SearchResponse {
   // Nothing was found in the colour asked for, so what's listed are
   // near-misses. Optional: absent from responses cached by older builds.
   showingAlternatives?: boolean;
-  // Set when the exact garment type asked for had nothing and the search
-  // climbed to a broader one. Optional: older cached responses lack it.
-  widenedToCategory?: string | null;
 }
 
 export async function searchProducts(query: string, dropped: string[] = []): Promise<SearchResponse> {
