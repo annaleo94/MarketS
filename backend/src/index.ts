@@ -35,6 +35,16 @@ async function main() {
     console.log(`[boot] LLM matching: ${env.llmEnabled ? `on (${env.openRouterModel})` : "off (keyword fallback)"}`);
   });
 
+  // A cached row holds a whole serialised response, so any build that
+  // changes how results are shaped, ranked or filtered would go on serving
+  // the previous build's answers until the TTL ran out. Twice now that has
+  // meant a fix looking like it hadn't worked -- once for a field the old
+  // rows didn't carry, once for a size rule the old rows predated. Relying
+  // on remembering to bump a version constant is what failed both times;
+  // a deploy restarts the process, so clearing here is automatic.
+  const { count: dropped } = await prisma.searchCache.deleteMany({});
+  if (dropped > 0) console.log(`[boot] cleared ${dropped} cached search(es) from the previous build`);
+
   const productCount = await prisma.product.count();
   if (productCount === 0) {
     console.log("[boot] catalog is empty, running initial ingest in the background (or run `npm run ingest` yourself)...");
