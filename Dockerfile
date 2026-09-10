@@ -4,6 +4,10 @@
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
+# Prisma's query/schema engine binaries need libssl; bookworm-slim doesn't
+# ship it, which breaks engine detection (silently defaults to the wrong
+# build) both when generating the client here and when running it below.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/package.json
@@ -17,6 +21,7 @@ RUN npm run build --workspace frontend
 
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 ENV PORT=8080
 ENV FRONTEND_DIST_PATH=/app/frontend-dist
