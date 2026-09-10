@@ -13,6 +13,7 @@ export interface SearchResultItem {
   imageUrl: string | null;
   inStock: boolean;
   matchReason: string;
+  isExact: boolean;
 }
 
 export interface SearchResponse {

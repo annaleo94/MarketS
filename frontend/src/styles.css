@@ -173,6 +173,11 @@ body {
   font-weight: 600;
 }
 
+.badge--alternative {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .badge--cheapest {
   background: var(--cheapest);
   color: white;

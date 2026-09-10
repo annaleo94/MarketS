@@ -1,6 +1,7 @@
 import { prisma } from "../db/prisma";
 import { catalogAdapters } from "./registry";
 import { CatalogAdapter } from "./types";
+import { enrichColors } from "./enrich-colors";
 
 export interface IngestSummary {
   store: string;
@@ -66,6 +67,14 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
     console.log(`[ingest] ${adapter.name}: ${products.length} products (${removed} removed)`);
     summaries.push({ store: adapter.key, fetched: products.length, removed });
   }
+
+  // Resolve colours for anything newly added. Existing products keep the
+  // colour they already have (the upsert above deliberately leaves the
+  // field alone), so this only pays for what's actually new.
+  const colors = await enrichColors();
+  console.log(
+    `[ingest] colours: ${colors.fromTitle} from titles, ${colors.fromVision} from photos, ${colors.unresolved} still pending`
+  );
 
   // Cached searches point at the catalog we just replaced -- their prices
   // and matches can be stale (or reference products that no longer exist),

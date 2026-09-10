@@ -1,5 +1,6 @@
 import { completeJson } from "./openrouter.client";
 import { relevanceScore } from "../scrapers/normalize";
+import { colorFromTitle } from "../catalog/colors";
 import { env } from "../env";
 
 // Shape-compatible with Prisma's Product model, without importing the
@@ -12,11 +13,16 @@ export interface CatalogEntry {
   url: string;
   imageUrl: string | null;
   inStock: boolean;
+  color: string | null;
 }
 
 export interface MatchResult {
   product: CatalogEntry;
   reason: string;
+  // false when the store had nothing of the requested kind and this is the
+  // nearest thing instead (a white bodysuit for "white shirt"). Shown to
+  // the shopper rather than quietly passed off as what they asked for.
+  isExact: boolean;
 }
 
 const KEYWORD_MATCH_THRESHOLD = 0.35;
@@ -83,14 +89,28 @@ function shortlist(
 ): CatalogEntry[] {
   if (products.length <= size) return products;
 
+  const requestedColor = colorFromTitle(rawQuery);
+
   return products
     .map((product) => {
-      const direct = relevanceScore(rawQuery, product.title);
+      // Colour lives in its own field, so fold it into the text the score
+      // sees -- otherwise a title with no colour word can never match a
+      // query that names one.
+      const searchable = product.color ? `${product.title} ${product.color}` : product.title;
+      const direct = relevanceScore(rawQuery, searchable);
       const viaKeywords = expandedKeywords.reduce(
-        (best, keyword) => Math.max(best, relevanceScore(keyword, product.title)),
+        (best, keyword) => Math.max(best, relevanceScore(keyword, searchable)),
         0
       );
-      return { product, score: Math.max(direct, viaKeywords) };
+      let score = Math.max(direct, viaKeywords);
+
+      // When the shopper names a colour, keep candidates of that colour in
+      // contention even if nothing else about the wording lines up, and
+      // push known-wrong colours down the list.
+      if (requestedColor && product.color) {
+        score = product.color === requestedColor ? Math.max(score, 0.8) : score * 0.3;
+      }
+      return { product, score };
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, size)
@@ -100,13 +120,16 @@ function shortlist(
 interface LlmResponse {
   productId: string | null;
   reason?: string;
+  matchType?: "exact" | "alternative";
 }
 
 // Returns `undefined` (not `null`) specifically when the LLM call itself
 // failed, so the caller knows to fall back rather than treat it as a
 // confident "no match".
 async function matchWithLlm(rawQuery: string, products: CatalogEntry[]): Promise<MatchResult | null | undefined> {
-  const catalogLines = products.map((p) => `${p.id} | ${p.title} | ₪${p.price}`).join("\n");
+  const catalogLines = products
+    .map((p) => `${p.id} | ${p.title}${p.color ? ` | צבע: ${p.color}` : ""} | ₪${p.price}`)
+    .join("\n");
 
   const response = await completeJson<LlmResponse>([
     {
@@ -114,13 +137,18 @@ async function matchWithLlm(rawQuery: string, products: CatalogEntry[]): Promise
       content:
         "אתה עוזר להשוואת מחירים המתמחה בבגדי תינוקות וילדים. תפקידך: מתוך רשימת מוצרים בחנות אחת, למצוא את " +
         "המוצר שהכי מתאים לתיאור החיפוש של הלקוח -- גם אם הניסוח שונה מהכותרת (מילים נרדפות, תיאור כללי, סדר " +
-        'מילים שונה, שפה חופשית). התחשב בסוג הפריט (חולצה/מכנסיים/סרוול/בגד ים וכו\'), מגדר (בן/בת/יוניסקס) וגיל ' +
-        "אם צוינו. אם באמת אין שום מוצר מתאים ברשימה, החזר null. ענה אך ורק ב-JSON בפורמט: " +
-        '{"productId": "<המזהה המדויק מהרשימה>" | null, "reason": "הסבר קצר בעברית (משפט אחד)"}',
+        'מילים שונה, שפה חופשית). התחשב בסוג הפריט (חולצה/מכנסיים/אוברול/בגד ים וכו\'), בצבע (מופיע בשדה "צבע" ' +
+        "כשהוא ידוע), במגדר ובגיל -- אם צוינו. " +
+        'סווג את ההתאמה: "exact" אם המוצר הוא באמת מה שהלקוח ביקש (אותו סוג פריט וגם הצבע שביקש, אם ביקש צבע); ' +
+        '"alternative" אם זה הדבר הקרוב ביותר בחנות אבל לא בדיוק מה שביקש (למשל בגד גוף במקום חולצה). ' +
+        "אל תבחר מוצר בצבע אחר מזה שהלקוח ביקש -- במקרה כזה עדיף להחזיר null. " +
+        "אם באמת אין שום מוצר מתאים או קרוב ברשימה, החזר null. ענה אך ורק ב-JSON בפורמט: " +
+        '{"productId": "<המזהה המדויק מהרשימה>" | null, "matchType": "exact" | "alternative", ' +
+        '"reason": "הסבר קצר בעברית (משפט אחד)"}',
     },
     {
       role: "user",
-      content: `תיאור החיפוש של הלקוח: "${rawQuery}"\n\nמוצרים זמינים בחנות (מזהה | כותרת | מחיר):\n${catalogLines}`,
+      content: `תיאור החיפוש של הלקוח: "${rawQuery}"\n\nמוצרים זמינים בחנות (מזהה | כותרת | צבע | מחיר):\n${catalogLines}`,
     },
   ]);
 
@@ -130,16 +158,24 @@ async function matchWithLlm(rawQuery: string, products: CatalogEntry[]): Promise
   const product = products.find((p) => p.id === response.productId);
   if (!product) return undefined; // hallucinated id -> don't trust this response, fall back
 
-  return { product, reason: response.reason ?? "" };
+  return { product, reason: response.reason ?? "", isExact: response.matchType !== "alternative" };
 }
 
 function matchWithKeywords(rawQuery: string, products: CatalogEntry[]): MatchResult | null {
+  const requestedColor = colorFromTitle(rawQuery);
   let best: { product: CatalogEntry; score: number } | null = null;
+
   for (const product of products) {
-    const score = relevanceScore(rawQuery, product.title);
+    // Without the LLM there's no judgement available, so a known colour
+    // mismatch is simply disqualifying rather than merely down-ranked.
+    if (requestedColor && product.color && product.color !== requestedColor) continue;
+
+    const searchable = product.color ? `${product.title} ${product.color}` : product.title;
+    const score = relevanceScore(rawQuery, searchable);
     if (score >= KEYWORD_MATCH_THRESHOLD && (!best || score > best.score)) {
       best = { product, score };
     }
   }
-  return best ? { product: best.product, reason: "התאמת מילות מפתח" } : null;
+
+  return best ? { product: best.product, reason: "התאמת מילות מפתח", isExact: true } : null;
 }

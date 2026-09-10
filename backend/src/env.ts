@@ -26,6 +26,12 @@ export const env = {
   // mistake) can't make `npm run ingest` crawl forever.
   ingestMaxPagesPerSource: Number(process.env.INGEST_MAX_PAGES_PER_SOURCE ?? 2),
 
+  // Products whose colour isn't stated in the title get it read off their
+  // photo (see catalog/enrich-colors.ts). Each product is resolved once,
+  // but the first run faces the whole catalogue, so cap the calls per run
+  // and let successive runs finish the backlog.
+  ingestMaxVisionCalls: Number(process.env.INGEST_MAX_VISION_CALLS ?? 250),
+
   // Optional shared secret for POST /api/admin/ingest. Leave unset for
   // local/dev use.
   adminToken: process.env.ADMIN_TOKEN ?? "",

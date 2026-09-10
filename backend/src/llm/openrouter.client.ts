@@ -6,10 +6,36 @@ export interface ChatMessage {
   content: string;
 }
 
+// Asks the model about an image (used to read a garment's colour off its
+// product photo when the store publishes no colour at all). Same JSON
+// contract and failure behaviour as completeJson.
+export async function completeJsonAboutImage<T>(
+  instruction: string,
+  imageUrl: string,
+  timeoutMs = 25000
+): Promise<T | null> {
+  return request<T>(
+    [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: instruction },
+          { type: "image_url", image_url: { url: imageUrl } },
+        ],
+      },
+    ],
+    timeoutMs
+  );
+}
+
 // Minimal OpenRouter (https://openrouter.ai) chat-completions client.
 // Requests strict JSON back via response_format -- every caller in this
 // project asks the model for a small structured object.
 export async function completeJson<T>(messages: ChatMessage[], timeoutMs = 20000): Promise<T | null> {
+  return request<T>(messages, timeoutMs);
+}
+
+async function request<T>(messages: unknown[], timeoutMs: number): Promise<T | null> {
   if (!env.llmEnabled) return null;
 
   try {

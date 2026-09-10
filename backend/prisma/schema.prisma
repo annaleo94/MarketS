@@ -41,6 +41,12 @@ model Product {
   imageUrl   String?
   category   String?
   inStock    Boolean  @default(true)
+  // Some stores (Fox, notably) publish no colour at all -- not in the
+  // title, not as a variant option. Colour is resolved once at ingest,
+  // from the title where it's stated and otherwise from the product photo,
+  // so colour searches can reach that inventory too. See catalog/colors.ts.
+  color       String?
+  colorSource String? // "title" | "vision"
   updatedAt  DateTime @updatedAt
   createdAt  DateTime @default(now())
 

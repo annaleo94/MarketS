@@ -18,6 +18,7 @@ export interface SearchResultItem {
   imageUrl: string | null;
   inStock: boolean;
   matchReason: string;
+  isExact: boolean;
 }
 
 export interface SearchResponse {
@@ -79,6 +80,7 @@ async function matchAcrossStores(rawQuery: string): Promise<SearchResultItem[]> 
       url: p.url,
       imageUrl: p.imageUrl,
       inStock: p.inStock,
+      color: p.color,
     }));
 
     try {
@@ -94,6 +96,7 @@ async function matchAcrossStores(rawQuery: string): Promise<SearchResultItem[]> 
         imageUrl: match.product.imageUrl,
         inStock: match.product.inStock,
         matchReason: match.reason,
+        isExact: match.isExact,
       });
     } catch (err) {
       console.warn(`[search] ${store.key} match failed:`, (err as Error).message);

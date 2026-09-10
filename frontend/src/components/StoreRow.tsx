@@ -19,6 +19,7 @@ export function StoreRow({ item, rank, isCheapest }: Props) {
         <div className="store-row__store-name">
           {item.store.name}
           {isCheapest && <span className="badge badge--cheapest">הכי זול</span>}
+          {!item.isExact && <span className="badge badge--alternative">חלופה קרובה</span>}
         </div>
         <div className="store-row__title">{item.title}</div>
         {item.matchReason && <div className="store-row__reason">{item.matchReason}</div>}
