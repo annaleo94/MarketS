@@ -20,6 +20,13 @@ export async function completeJson<T>(messages: ChatMessage[], timeoutMs = 20000
         messages,
         response_format: { type: "json_object" },
         temperature: 0,
+        // The replies we ask for are a tiny JSON object (a product id +
+        // one-sentence reason). Without a cap, some models default to
+        // their full max output (tens of thousands of tokens), which
+        // OpenRouter then reserves budget for up front -- that alone can
+        // trip a 402 "insufficient credits" on a low account balance even
+        // though the actual reply is a few dozen tokens.
+        max_tokens: 300,
       },
       {
         headers: {
@@ -36,7 +43,8 @@ export async function completeJson<T>(messages: ChatMessage[], timeoutMs = 20000
     if (!content) return null;
     return parseJsonLoosely<T>(content);
   } catch (err) {
-    console.warn("[openrouter] request failed:", (err as Error).message);
+    const detail = axios.isAxiosError(err) ? JSON.stringify(err.response?.data ?? err.message) : (err as Error).message;
+    console.warn("[openrouter] request failed:", detail);
     return null;
   }
 }
