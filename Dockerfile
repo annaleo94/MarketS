@@ -34,4 +34,9 @@ COPY --from=build /app/frontend/dist ./frontend-dist
 
 EXPOSE 8080
 WORKDIR /app/backend
-CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/index.js"]
+# `|| true`: in some container sandboxes Prisma's schema-engine throws an
+# EACCES trying to kill its own already-finished child process during
+# cleanup -- cosmetic (the push itself already succeeded and logged so by
+# that point), but left unhandled it makes `prisma db push` exit non-zero
+# and `&&` would then skip starting the server entirely.
+CMD ["sh", "-c", "npx prisma db push --skip-generate || true; node dist/index.js"]
