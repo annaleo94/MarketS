@@ -18,6 +18,11 @@ export function parseSizeLabel(raw: string): MonthRange | null {
 
   if (/^(n\.?b\.?|newborn|ניובורן)$/.test(label)) return { min: 0, max: 3 };
 
+  // Footwear is on its own scale and must not be read as months -- checked
+  // before the range and bare-number rules below, which would both happily
+  // misread it.
+  if (isShoeSizeLabel(label)) return null;
+
   // "2-3y", "9-10y" -- a span of years. TerminalX sizes most of its
   // clothing this way, and without this the label parses to nothing: an
   // item stocked in 2-3Y/3-4Y/4-5Y was dropped outright from a search for
@@ -78,8 +83,28 @@ export function productSizeRanges(sizesCsv: string | null): MonthRange[] {
 // through, but a shoe sized 20-26 answering every age query is just wrong.
 export function isShoeSizeLabel(raw: string): boolean {
   const label = raw.trim().replace(/\s+/g, "");
-  const n = Number(label.replace(",", "."));
-  return Number.isFinite(n) && n >= 15 && n <= 50;
+
+  // "36", "23.5"
+  const single = Number(label.replace(",", "."));
+  if (Number.isFinite(single)) return single >= 15 && single <= 50;
+
+  // Half sizes written as a fraction: "351\2", "362\3", "38 2\3".
+  if (/^\d{2}[\\/]?\d?[\\/]\d$/.test(label)) return true;
+
+  // "19-21", "24-25". Ambiguous with month ranges on the face of it, but
+  // the two don't actually overlap in these catalogues: clothing months are
+  // written on a standard ladder that never starts at 19 or later
+  // ("12-18", "18-24", "24-36"), while shoe spans are narrow and start at
+  // 19 or above. Without this a sandal in 25-26 read as 25-26 *months* and
+  // answered a request for a two-year-old.
+  const span = label.match(/^(\d+)-(\d+)$/);
+  if (span) {
+    const from = Number(span[1]);
+    const to = Number(span[2]);
+    return from >= 19 && to <= 50 && to - from <= 3;
+  }
+
+  return false;
 }
 
 // Does the product actually stock something in the requested age? Products
