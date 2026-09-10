@@ -43,6 +43,9 @@ export interface SearchResponse {
   filters: AppliedFilter[];
   stores: StoreResults[];
   totalCount: number;
+  // True when nothing was found in the colour asked for, so what's listed
+  // are near-misses rather than answers. The UI says so.
+  showingAlternatives: boolean;
 }
 
 const GENDER_LABELS: Record<string, string> = { girls: "בנות", boys: "בנים", unisex: "יוניסקס" };
@@ -110,12 +113,24 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
 
   // --- Soft signals. These only order what survived above.
   const scored = sizeFiltered
-    .map((product) => ({ product, score: scoreProduct(product, parsed) }))
+    .map((product) => ({ product, score: scoreProduct(product, parsed), colorMatch: colorMatchFor(product, parsed.color) }))
     .filter((entry) => entry.score >= env.searchMinScore)
     .sort((a, b) => b.score - a.score);
 
+  // Asked for a colour, and something actually comes in it? Then a garment
+  // in a different colour is simply a wrong answer, and is dropped -- the
+  // shopper asked for white. Only when nothing in the catalogue answers the
+  // colour do the near-misses earn their place, shown and marked rather
+  // than leaving the shopper with an empty page. Deciding this on the
+  // colour tier rather than the score keeps it consistent: before, a
+  // strongly-worded title absorbed the mismatch penalty and a blue bikini
+  // came back for "ביקיני לבנה", while a plainly-titled grey shirt didn't.
+  const onTarget = scored.filter((entry) => entry.colorMatch !== "other");
+  const showingAlternatives = parsed.color !== null && onTarget.length === 0 && scored.length > 0;
+  const visible = parsed.color && onTarget.length > 0 ? onTarget : scored;
+
   const byStore = new Map<string, SearchResultItem[]>();
-  for (const { product, score } of scored) {
+  for (const { product, score, colorMatch } of visible) {
     const items = byStore.get(product.storeId) ?? [];
     items.push({
       id: product.id,
@@ -128,7 +143,7 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
       sizes: product.sizes,
       color: product.color,
       colors: productColors(product),
-      colorMatch: colorMatchFor(product, parsed.color),
+      colorMatch,
       categorySlug: product.categorySlug,
       gender: product.gender,
       score,
@@ -156,7 +171,8 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
     llmEnabled: env.llmEnabled,
     filters: describeFilters(parsed),
     stores: storeResults,
-    totalCount: scored.length,
+    totalCount: visible.length,
+    showingAlternatives,
   };
 }
 
@@ -185,11 +201,12 @@ function scoreProduct(
   // the soft signals below, which would otherwise be silently erased by it.
   if (parsed.categorySlug) score = Math.max(score, 0.5);
 
+  // Only a bonus: a mismatch is handled by the colour tier in runSearch,
+  // not by a penalty here, which a strongly-worded title could out-score.
   if (parsed.color) {
     const match = colorMatchFor(product, parsed.color);
     if (match === "exact") score += 0.6;
     else if (match === "pack") score += 0.3;
-    else if (match === "other") score -= 0.2;
   }
 
   if (parsed.style && relevanceScore(parsed.style, product.title) > 0.5) score += 0.2;
@@ -213,7 +230,7 @@ function describeFilters(parsed: ParsedQuery): AppliedFilter[] {
 // would go on serving the old one until the TTL ran out, quietly missing
 // the new fields. Bump this whenever either changes; old entries then miss
 // and are rewritten rather than being served half-formed.
-const RESULTS_SCHEMA_VERSION = 2;
+const RESULTS_SCHEMA_VERSION = 3;
 
 function buildCacheKey(normalizedQuery: string, overrides?: Partial<ParsedQuery>): string {
   const base = `v${RESULTS_SCHEMA_VERSION}:${normalizedQuery}`;
@@ -232,6 +249,7 @@ function emptyResponse(rawQuery: string, normalizedQuery: string): SearchRespons
     filters: [],
     stores: [],
     totalCount: 0,
+    showingAlternatives: false,
   };
 }
 

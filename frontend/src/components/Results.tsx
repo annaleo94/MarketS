@@ -47,6 +47,12 @@ export function Results({ data, onDropFilter }: Props) {
         </button>
       </div>
 
+      {data.showingAlternatives && data.totalCount > 0 && (
+        <p className="notice">
+          לא נמצא פריט בצבע שביקשתם. אלה הפריטים הקרובים ביותר, בצבעים אחרים.
+        </p>
+      )}
+
       {data.totalCount === 0 && (
         <p className="empty-state">
           לא נמצאו פריטים שעונים על כל התנאים. אפשר להסיר סינון למעלה כדי להרחיב את החיפוש.

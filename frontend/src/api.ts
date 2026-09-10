@@ -51,6 +51,9 @@ export interface SearchResponse {
   filters: AppliedFilter[];
   stores: StoreResults[];
   totalCount: number;
+  // Nothing was found in the colour asked for, so what's listed are
+  // near-misses. Optional: absent from responses cached by older builds.
+  showingAlternatives?: boolean;
 }
 
 export async function searchProducts(query: string, dropped: string[] = []): Promise<SearchResponse> {

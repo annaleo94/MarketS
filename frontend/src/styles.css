@@ -113,6 +113,17 @@ body {
   color: #dc2626;
 }
 
+/* Said when nothing matched the colour asked for and the list is
+   near-misses instead -- worth more than a badge on each card. */
+.notice {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0 0 14px;
+  color: #92400e;
+}
+
 .empty-state,
 .error-state,
 .loading-state,
