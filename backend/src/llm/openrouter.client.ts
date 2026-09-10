@@ -31,11 +31,15 @@ export async function completeJsonAboutImage<T>(
 // Minimal OpenRouter (https://openrouter.ai) chat-completions client.
 // Requests strict JSON back via response_format -- every caller in this
 // project asks the model for a small structured object.
-export async function completeJson<T>(messages: ChatMessage[], timeoutMs = 20000): Promise<T | null> {
-  return request<T>(messages, timeoutMs);
+export async function completeJson<T>(
+  messages: ChatMessage[],
+  timeoutMs = 20000,
+  maxTokens = 300
+): Promise<T | null> {
+  return request<T>(messages, timeoutMs, maxTokens);
 }
 
-async function request<T>(messages: unknown[], timeoutMs: number): Promise<T | null> {
+async function request<T>(messages: unknown[], timeoutMs: number, maxTokens = 300): Promise<T | null> {
   if (!env.llmEnabled) return null;
 
   try {
@@ -46,13 +50,12 @@ async function request<T>(messages: unknown[], timeoutMs: number): Promise<T | n
         messages,
         response_format: { type: "json_object" },
         temperature: 0,
-        // The replies we ask for are a tiny JSON object (a product id +
-        // one-sentence reason). Without a cap, some models default to
-        // their full max output (tens of thousands of tokens), which
-        // OpenRouter then reserves budget for up front -- that alone can
-        // trip a 402 "insufficient credits" on a low account balance even
-        // though the actual reply is a few dozen tokens.
-        max_tokens: 300,
+        // Capped because without one some models reserve budget for their
+        // full max output (tens of thousands of tokens), which can trip a
+        // 402 on a low balance. Callers returning a row per product must
+        // raise it -- a truncated reply is invalid JSON and silently
+        // yields nothing.
+        max_tokens: maxTokens,
       },
       {
         headers: {

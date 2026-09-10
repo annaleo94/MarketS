@@ -39,10 +39,13 @@ interface Classified {
   gender?: Gender;
 }
 
-const BATCH_SIZE = 40;
+// Small enough that the reply comfortably fits the token budget below:
+// one truncated response loses the whole batch.
+const BATCH_SIZE = 25;
+const CLASSIFY_MAX_TOKENS = 2500;
 
 // Classifies whatever is still missing a category, in batches -- one call
-// per 40 products rather than per product, which keeps a 1,500-product
+// per batch rather than per product, which keeps a 1,500-product
 // catalogue to a few dozen cheap text calls.
 export async function classifyCatalog(): Promise<{ fromStore: number; fromLlm: number; unresolved: number }> {
   const pending = await prisma.product.findMany({
@@ -101,7 +104,7 @@ async function classifyBatch(batch: { id: string; title: string }[]): Promise<Cl
         'ענה אך ורק ב-JSON: {"items": [{"id": "<המזהה>", "category": "<slug>", "gender": "girls|boys|unisex"}]}',
     },
     { role: "user", content: list },
-  ]);
+  ], 40000, CLASSIFY_MAX_TOKENS);
 
   return Array.isArray(response?.items) ? response.items : [];
 }
