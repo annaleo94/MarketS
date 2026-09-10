@@ -64,21 +64,28 @@ async function matchAcrossStores(rawQuery: string): Promise<SearchResultItem[]> 
   // how the shopper phrased it.
   const expandedKeywords = await expandQueryKeywords(rawQuery);
 
-  const perStore = await Promise.allSettled(
-    stores.map(async (store) => {
-      const catalog: CatalogEntry[] = store.products.map((p) => ({
-        id: p.id,
-        title: p.title,
-        price: p.price,
-        currency: p.currency,
-        url: p.url,
-        imageUrl: p.imageUrl,
-        inStock: p.inStock,
-      }));
-      const match = await matchInStore(rawQuery, catalog, expandedKeywords);
-      if (!match) return null;
+  // Stores are matched one at a time rather than in parallel: providers
+  // cap how much spend you can have in flight at once, and firing every
+  // store's request together trips that cap and drops whole stores from
+  // the results. Each request is small now (see SHORTLIST_SIZE), so the
+  // sequential round trip costs a second or so.
+  const results: SearchResultItem[] = [];
+  for (const store of stores) {
+    const catalog: CatalogEntry[] = store.products.map((p) => ({
+      id: p.id,
+      title: p.title,
+      price: p.price,
+      currency: p.currency,
+      url: p.url,
+      imageUrl: p.imageUrl,
+      inStock: p.inStock,
+    }));
 
-      const item: SearchResultItem = {
+    try {
+      const match = await matchInStore(rawQuery, catalog, expandedKeywords);
+      if (!match) continue;
+
+      results.push({
         store: { key: store.key, name: store.name, baseUrl: store.baseUrl, logoUrl: store.logoUrl, isLive: store.isLive },
         title: match.product.title,
         price: match.product.price,
@@ -87,19 +94,11 @@ async function matchAcrossStores(rawQuery: string): Promise<SearchResultItem[]> 
         imageUrl: match.product.imageUrl,
         inStock: match.product.inStock,
         matchReason: match.reason,
-      };
-      return item;
-    })
-  );
-
-  const results: SearchResultItem[] = [];
-  perStore.forEach((outcome, i) => {
-    if (outcome.status === "rejected") {
-      console.warn(`[search] ${stores[i].key} match failed:`, outcome.reason?.message ?? outcome.reason);
-      return;
+      });
+    } catch (err) {
+      console.warn(`[search] ${store.key} match failed:`, (err as Error).message);
     }
-    if (outcome.value) results.push(outcome.value);
-  });
+  }
 
   return results.sort((a, b) => a.price - b.price);
 }
