@@ -34,9 +34,12 @@ COPY --from=build /app/frontend/dist ./frontend-dist
 
 EXPOSE 8080
 WORKDIR /app/backend
-# `|| true`: in some container sandboxes Prisma's schema-engine throws an
-# EACCES trying to kill its own already-finished child process during
-# cleanup -- cosmetic (the push itself already succeeded and logged so by
-# that point), but left unhandled it makes `prisma db push` exit non-zero
-# and `&&` would then skip starting the server entirely.
-CMD ["sh", "-c", "npx prisma db push --skip-generate || true; node dist/index.js"]
+# This container runs without CAP_KILL, so Prisma's EACCES when reaping its
+# own schema-engine child isn't just noisy -- the child survives, keeps the
+# parent's event loop alive, and `prisma db push` never exits at all (it
+# hangs *after* applying the schema and logging success). Unbounded, that
+# means the server is never reached and nothing ever listens on $PORT.
+# `timeout` bounds the hang; `|| true` covers both its 124 and Prisma's own
+# non-zero exit; `exec` hands PID 1 to node so SIGTERM actually stops the
+# container instead of being SIGKILLed 10s later.
+CMD ["sh", "-c", "timeout 20 /app/node_modules/.bin/prisma db push --skip-generate || true; exec node dist/index.js"]
