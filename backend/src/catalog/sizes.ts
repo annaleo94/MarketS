@@ -16,7 +16,17 @@ export function parseSizeLabel(raw: string): MonthRange | null {
   const label = raw.trim().toLowerCase().replace(/\s+/g, "");
   if (!label) return null;
 
-  if (/^(nb|newborn|ניובורן)$/.test(label)) return { min: 0, max: 3 };
+  if (/^(n\.?b\.?|newborn|ניובורן)$/.test(label)) return { min: 0, max: 3 };
+
+  // "2-3y", "9-10y" -- a span of years. TerminalX sizes most of its
+  // clothing this way, and without this the label parses to nothing: an
+  // item stocked in 2-3Y/3-4Y/4-5Y was dropped outright from a search for
+  // size 4, which is a hard filter deleting stock the shopper asked for.
+  const yearRange = label.match(/^(\d+)-(\d+)\s*(y|שנים)$/);
+  if (yearRange) {
+    const [, from, to] = yearRange;
+    return { min: Number(from) * YEAR, max: (Number(to) + 1) * YEAR };
+  }
 
   // "18-24m", "0-3", "3-6"
   const range = label.match(/^(\d+)-(\d+)\s*(m|מ|ח)?$/);
@@ -62,14 +72,31 @@ export function productSizeRanges(sizesCsv: string | null): MonthRange[] {
     .filter((r): r is MonthRange => r !== null);
 }
 
+// Footwear is sized on a scale of its own (EU 19-31 for this age group),
+// which says nothing about the wearer's age. Distinguishing it from a label
+// we simply couldn't read matters: an unreadable label should let a product
+// through, but a shoe sized 20-26 answering every age query is just wrong.
+export function isShoeSizeLabel(raw: string): boolean {
+  const label = raw.trim().replace(/\s+/g, "");
+  const n = Number(label.replace(",", "."));
+  return Number.isFinite(n) && n >= 15 && n <= 50;
+}
+
 // Does the product actually stock something in the requested age? Products
 // whose sizes we couldn't parse at all return true -- an unreadable label
 // is missing information, and a hard filter shouldn't delete stock over
 // that (the shopper still sees the size list and can judge).
 export function productHasSize(sizesCsv: string | null, requested: MonthRange): boolean {
   const ranges = productSizeRanges(sizesCsv);
-  if (ranges.length === 0) return true;
-  return ranges.some((r) => rangesOverlap(r, requested));
+  if (ranges.length > 0) return ranges.some((r) => rangesOverlap(r, requested));
+
+  // Nothing on the age scale. If every label we can see is a shoe size, the
+  // product isn't answerable by an age at all -- excluding it is right,
+  // whereas the fallback below would have it match every age there is.
+  const labels = (sizesCsv ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (labels.length > 0 && labels.every(isShoeSizeLabel)) return false;
+
+  return true;
 }
 
 // What the shopper asked for, in months: "שנתיים", "גיל 3 חודשים",

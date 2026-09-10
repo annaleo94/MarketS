@@ -1,7 +1,7 @@
 # MarketS
 
 פיילוט: תארו פריט בגדים לתינוקות/ילדים במילים שלכם → רשימת החנויות שמוכרות
-אותו (פוקס, שילב, קרטרס), ממוינת מהזול ליקר. חיפוש בשפה חופשית מופעל ע"י LLM
+אותו (פוקס, שילב, קרטרס, טרמינל X), ממוינת מהזול ליקר. חיפוש בשפה חופשית מופעל ע"י LLM
 דרך [OpenRouter](https://openrouter.ai).
 
 **חי באוויר:** https://itl57pbfd8a9c.box.lathe.computer
@@ -13,8 +13,9 @@
                     │  (או POST /api/admin/ingest, או אוטומטי באתחול אם הקטלוג ריק)
                     ▼                       │
    fox.co.il ──┐                            │
-  shilav.co.il ─┼─► Catalog adapters ──► Product table (SQLite/Postgres)
-cartersoshkosh ─┘   (נתונים אמיתיים)              │
+  shilav.co.il ─┤                             │
+cartersoshkosh ─┼─► Catalog adapters ──► Product table (Postgres)
+ terminalx.com ─┘   (נתונים אמיתיים)              │
                                                   ▼
 frontend (React) ──► GET /api/search?q=... ──► לכל חנות: LLM (OpenRouter) בוחר
                                                  את המוצר המתאים ביותר לתיאור
@@ -66,6 +67,7 @@ npm run dev:frontend   # http://localhost:5173
 | פוקס | Shopify | `/collections/<handle>/products.json` -- endpoint JSON ציבורי רשמי של Shopify | `backend/src/catalog/adapters/fox.adapter.ts` |
 | שילב | Shopify | אותו endpoint, קטגוריית `fashion-clothing` | `backend/src/catalog/adapters/shilav.adapter.ts` |
 | קרטרס | Magento (Hyva) | פרסור HTML של דף הקטגוריה -- הכותרת/מחיר/קישור מגיעים מתוך JSON מובנה (Google Tag Manager `dataLayer`) שמוטמע בכל כרטיס מוצר, לא ניחוש CSS selectors | `backend/src/catalog/adapters/carters.adapter.ts` |
+| טרמינל X | Magento + React SSR | ה-state שהשרת מזריק לדף (`window.__INITIAL_STATE__`) הוא בדיוק ה-payload של Magento GraphQL שהאתר עצמו מרנדר ממנו: מחיר, מלאי, מידות וצבעים מגיעים מובנים | `backend/src/catalog/adapters/terminalx.adapter.ts` |
 
 **מיננה** נבדקה ונמצאה חסומה ע"י אתגר בוט אקטיבי של Cloudflare
 (`cf-mitigated: challenge`) -- לא עקפנו את זה, כי זו הגנה מכוונת נגד גישה
@@ -90,6 +92,7 @@ backend/src/
       fox.adapter.ts
       shilav.adapter.ts
       carters.adapter.ts   # פרסור HTML/GTM ייעודי לקרטרס
+      terminalx.adapter.ts # חילוץ ה-SSR state של טרמינל X
     registry.ts             # אילו חנויות פעילות בפיילוט
     ingest.ts                # שואב הכל, upsert ל-DB (גם CLI: `npm run ingest`)
   llm/

@@ -3,6 +3,18 @@ import { catalogAdapters } from "./registry";
 import { CatalogAdapter } from "./types";
 import { enrichColors } from "./enrich-colors";
 import { classifyCatalog, genderFromStoreValue } from "./classify";
+import { normalizeColorName } from "./colors";
+
+// Keeps only the colours that map onto our vocabulary. Marketplace listings
+// carry plenty that don't -- supplier codes like "SUMMIT WHI" or
+// "OFF NOIR/B" on footwear, or "מולטי" for a print -- and those are left
+// unresolved so the photo pass can have a go instead of us storing a colour
+// name no shopper would ever search for.
+function statedColors(raw: string[] | undefined): string[] | null {
+  if (!raw || raw.length === 0) return null;
+  const mapped = [...new Set(raw.map(normalizeColorName).filter((c): c is string => !!c))];
+  return mapped.length > 0 ? mapped : null;
+}
 
 export interface IngestSummary {
   store: string;
@@ -35,6 +47,14 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
     }
 
     for (const p of products) {
+      // A colour the store states itself beats anything we could infer, and
+      // costs nothing -- so it is written on every run, and the product then
+      // skips colour enrichment entirely.
+      const stated = statedColors(p.colors);
+      const colorFields = stated
+        ? { color: stated[0], colors: stated.join(","), colorSource: "store", colorIsSolid: stated.length === 1 }
+        : {};
+
       await prisma.product.upsert({
         where: { storeId_externalId: { storeId: store.id, externalId: p.externalId } },
         update: {
@@ -48,6 +68,7 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
           sizes: p.sizes?.join(",") ?? null,
           storeGender: p.storeGender ?? null,
           ...(genderFromStoreValue(p.storeGender) ? { gender: genderFromStoreValue(p.storeGender)! } : {}),
+          ...colorFields,
         },
         create: {
           storeId: store.id,
@@ -62,6 +83,7 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
           sizes: p.sizes?.join(",") ?? null,
           storeGender: p.storeGender ?? null,
           gender: genderFromStoreValue(p.storeGender) ?? "unisex",
+          ...colorFields,
         },
       });
     }
