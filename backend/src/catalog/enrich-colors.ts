@@ -12,7 +12,10 @@ const VISION_CONCURRENCY = 5;
 // resolved, so the spend is one-off rather than per-run.
 export async function enrichColors(): Promise<{ fromTitle: number; fromVision: number; unresolved: number }> {
   const pending = await prisma.product.findMany({
-    where: { color: null },
+    // colorSource is set even when nothing could be read off the photo, so
+    // a genuinely undetectable product (a pack shot of hair clips) is paid
+    // for once rather than re-attempted on every single ingest.
+    where: { color: null, colorSource: null },
     select: { id: true, title: true, imageUrl: true },
   });
 
@@ -47,10 +50,19 @@ export async function enrichColors(): Promise<{ fromTitle: number; fromVision: n
       const detected = await Promise.all(slice.map((p) => detectColorFromImage(p.imageUrl!)));
 
       for (const [j, result] of detected.entries()) {
-        if (!result) continue;
+        if (!result) {
+          // Record the attempt so the next run skips it (see the query above).
+          await prisma.product.update({ where: { id: slice[j].id }, data: { colorSource: "none" } });
+          continue;
+        }
         await prisma.product.update({
           where: { id: slice[j].id },
-          data: { color: result.color, colorSource: "vision", colorIsSolid: result.isSolid },
+          data: {
+            color: result.colors[0],
+            colors: result.colors.join(","),
+            colorSource: "vision",
+            colorIsSolid: result.isSolid,
+          },
         });
         fromVision += 1;
       }
@@ -60,19 +72,43 @@ export async function enrichColors(): Promise<{ fromTitle: number; fromVision: n
   return { fromTitle, fromVision, unresolved: needsVision.length - fromVision };
 }
 
-async function detectColorFromImage(imageUrl: string): Promise<{ color: string; isSolid: boolean } | null> {
-  const response = await completeJsonAboutImage<{ color?: string | null; isSolid?: boolean }>(
+interface DetectedGarment {
+  color?: string | null;
+  isSolid?: boolean;
+}
+
+// Asks for one row per garment in the photo. A multipack shot shows two or
+// three garments in different colours, and asking for "the" colour of that
+// made the model answer with a bare array instead -- which parsed fine as
+// JSON but had no `color` on it, so every multipack in the catalogue came
+// back unresolved and was retried on every ingest, forever.
+async function detectColorFromImage(imageUrl: string): Promise<{ colors: string[]; isSolid: boolean } | null> {
+  const response = await completeJsonAboutImage<{ items?: DetectedGarment[] } | DetectedGarment[]>(
     `זו תמונה של פריט לבוש לתינוקות/ילדים מאתר חנות. התעלם מהרקע ומהדוגמן/ית. ` +
-      `1) מהו הצבע העיקרי של הבגד עצמו? בחר בדיוק אחד מהערכים: ${CANONICAL_COLORS.join(", ")}. ` +
-      `2) האם הבגד בצבע אחיד אחד? החזר isSolid=false אם יש שילוב צבעים משמעותי -- ` +
-      `למשל שרוולים בצבע אחר מהגוף, פסים, או הדפס גדול שמכסה חלק ניכר מהבגד. ` +
-      `הדפס קטן על החזה עדיין נחשב אחיד. ` +
-      `אם התמונה לא מציגה בגד או שהצבע לא ברור, החזר color=null. ` +
-      `ענה אך ורק ב-JSON: {"color": "<צבע>" | null, "isSolid": true|false}`,
+      `אם התמונה מציגה מארז של כמה בגדים, החזר שורה נפרדת לכל בגד במארז. ` +
+      `לכל בגד: ` +
+      `1) color -- הצבע העיקרי של הבגד עצמו, בדיוק אחד מהערכים: ${CANONICAL_COLORS.join(", ")}. ` +
+      `2) isSolid -- false אם יש בבגד שילוב צבעים משמעותי, למשל שרוולים בצבע אחר מהגוף, ` +
+      `פסים, או הדפס גדול שמכסה חלק ניכר מהבגד. הדפס קטן על החזה עדיין נחשב אחיד. ` +
+      `אם התמונה לא מציגה בגד כלל או שהצבע לא ברור, החזר רשימה ריקה. ` +
+      `ענה אך ורק ב-JSON: {"items": [{"color": "<צבע>", "isSolid": true|false}]}`,
     imageUrl
   );
 
-  const color = normalizeColorName(response?.color);
-  if (!color) return null;
-  return { color, isSolid: response?.isSolid !== false };
+  // Accept the bare array too: it is what the model reaches for on a
+  // multipack even when asked for an object, and the data is right either way.
+  const garments = Array.isArray(response) ? response : response?.items;
+  if (!Array.isArray(garments)) return null;
+
+  const colors: string[] = [];
+  for (const garment of garments) {
+    const color = normalizeColorName(garment?.color);
+    if (color && !colors.includes(color)) colors.push(color);
+  }
+  if (colors.length === 0) return null;
+
+  // A pack of differently-coloured garments is not a solid-coloured item,
+  // whatever the individual garments are.
+  const isSolid = colors.length === 1 && garments.every((g) => g?.isSolid !== false);
+  return { colors, isSolid };
 }

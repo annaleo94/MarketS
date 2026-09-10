@@ -3,6 +3,7 @@ import { normalizeQuery, relevanceScore } from "../scrapers/normalize";
 import { parseQuery, ParsedQuery } from "../search/parse-query";
 import { categoryWithDescendants, categoryLabel } from "../catalog/taxonomy";
 import { productHasSize } from "../catalog/sizes";
+import { productColors } from "../catalog/colors";
 import { env } from "../env";
 
 export interface SearchResultItem {
@@ -15,6 +16,7 @@ export interface SearchResultItem {
   inStock: boolean;
   sizes: string | null;
   color: string | null;
+  colors: string[]; // every colour in the listing -- more than one for a multipack
   categorySlug: string | null;
   gender: string;
   score: number;
@@ -101,6 +103,7 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
       inStock: product.inStock,
       sizes: product.sizes,
       color: product.color,
+      colors: productColors(product),
       categorySlug: product.categorySlug,
       gender: product.gender,
       score,
@@ -135,14 +138,21 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
 // Ranking only. A colour or style mismatch pushes an item down the list;
 // it never removes it, because the shopper may well still want it.
 function scoreProduct(
-  product: { title: string; color: string | null; colorIsSolid: boolean | null },
+  product: { title: string; color: string | null; colors: string | null; colorIsSolid: boolean | null },
   parsed: ParsedQuery
 ): number {
   let score = relevanceScore(parsed.semanticQuery, product.title);
 
   if (parsed.color) {
-    if (product.color === parsed.color) score += product.colorIsSolid === false ? 0.3 : 0.6;
-    else if (product.color) score -= 0.2;
+    const colors = productColors(product);
+    if (colors.includes(parsed.color)) {
+      // Best when the whole garment is that colour. A multipack containing
+      // one white bodysuit among three, or a colour-blocked shirt, does get
+      // the shopper the colour they asked for -- just not an item that is
+      // wholly it -- so it ranks below a plain white one rather than beside it.
+      const wholly = colors.length === 1 && product.colorIsSolid !== false;
+      score += wholly ? 0.6 : 0.3;
+    } else if (colors.length > 0) score -= 0.2;
   }
 
   if (parsed.style && relevanceScore(parsed.style, product.title) > 0.5) score += 0.2;

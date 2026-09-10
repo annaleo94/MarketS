@@ -16,7 +16,11 @@ export function ProductCard({ item, isCheapest }: { item: SearchResultItem; isCh
       <div className="product__body">
         <div className="product__title">{item.title}</div>
         {item.sizes && <div className="product__meta">מידות: {item.sizes.split(",").join(" · ")}</div>}
-        {item.color && <div className="product__meta">צבע: {item.color}</div>}
+        {item.colors.length > 1 ? (
+          <div className="product__meta">צבעים במארז: {item.colors.join(" · ")}</div>
+        ) : (
+          item.color && <div className="product__meta">צבע: {item.color}</div>
+        )}
       </div>
 
       <div className="product__buy">

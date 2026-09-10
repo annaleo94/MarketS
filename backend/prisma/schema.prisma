@@ -46,7 +46,12 @@ model Product {
   // from the title where it's stated and otherwise from the product photo,
   // so colour searches can reach that inventory too. See catalog/colors.ts.
   color       String?
-  colorSource String? // "title" | "vision"
+  colorSource String? // "title" | "vision" | "none" (looked at the photo, couldn't tell)
+  // Multipacks ("מארז 3 בגדי גוף") are one listing holding several garments
+  // in different colours, so a single `color` can't describe them: this
+  // holds every colour in the pack, comma-separated, and `color` is the
+  // first of them. One colour for an ordinary single-garment product.
+  colors      String?
   // Comma-separated size labels as the store lists them ("3M,6M,12M" or
   // "2,3,4"), so an age/size in the query can be matched against stock.
   sizes       String?

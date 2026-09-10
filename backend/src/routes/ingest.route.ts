@@ -36,9 +36,11 @@ ingestRoute.post("/admin/ingest", async (req, res) => {
   Promise.resolve()
     .then(async () => {
       if (recolor) {
+        // "none" is included: those are the ones a previous detector gave
+        // up on, so they are exactly what an improved one needs to revisit.
         const { count } = await prisma.product.updateMany({
-          where: { colorSource: "vision" },
-          data: { color: null, colorSource: null, colorIsSolid: null },
+          where: { colorSource: { in: ["vision", "none"] } },
+          data: { color: null, colors: null, colorSource: null, colorIsSolid: null },
         });
         console.log(`[ingest] cleared ${count} photo-derived colour(s) for re-detection`);
       }

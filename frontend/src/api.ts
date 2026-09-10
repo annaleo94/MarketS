@@ -8,6 +8,7 @@ export interface SearchResultItem {
   inStock: boolean;
   sizes: string | null;
   color: string | null;
+  colors: string[]; // more than one for a multipack listing
   categorySlug: string | null;
   gender: string;
   score: number;

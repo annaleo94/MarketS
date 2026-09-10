@@ -49,3 +49,12 @@ export function normalizeColorName(raw: string | null | undefined): string | nul
   if (direct) return direct;
   return colorFromTitle(raw);
 }
+
+// Every colour a product comes in. Usually one, but a multipack listing
+// holds several garments in different colours (see Product.colors), and a
+// shopper after a white bodysuit is genuinely served by a 3-pack that has
+// one in it -- so matching has to see the whole set, not just the first.
+export function productColors(product: { color: string | null; colors?: string | null }): string[] {
+  if (product.colors) return product.colors.split(",").filter(Boolean);
+  return product.color ? [product.color] : [];
+}
