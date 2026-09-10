@@ -34,12 +34,12 @@ COPY --from=build /app/frontend/dist ./frontend-dist
 
 EXPOSE 8080
 WORKDIR /app/backend
-# This container runs without CAP_KILL, so Prisma's EACCES when reaping its
-# own schema-engine child isn't just noisy -- the child survives, keeps the
-# parent's event loop alive, and `prisma db push` never exits at all (it
-# hangs *after* applying the schema and logging success). Unbounded, that
-# means the server is never reached and nothing ever listens on $PORT.
-# `timeout` bounds the hang; `|| true` covers both its 124 and Prisma's own
-# non-zero exit; `exec` hands PID 1 to node so SIGTERM actually stops the
-# container instead of being SIGKILLed 10s later.
-CMD ["sh", "-c", "timeout 20 /app/node_modules/.bin/prisma db push --skip-generate || true; exec node dist/index.js"]
+# Prisma can't reap its own schema-engine child here (kill(2) returns
+# EACCES in this sandbox), so the child outlives it, keeps the parent's
+# event loop alive, and `prisma db push` never exits -- it hangs *after*
+# applying the schema and logging success, and it traps SIGTERM into the
+# same broken cleanup, so `timeout` can't reliably end it either.
+# So don't make the server wait on it: push the schema in the background
+# (its actual work takes <1s) and hand PID 1 straight to node, which then
+# listens within seconds and gets SIGTERM on shutdown like it should.
+CMD ["sh", "-c", "(/app/node_modules/.bin/prisma db push --skip-generate || true) & exec node dist/index.js"]
