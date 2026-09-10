@@ -2,6 +2,7 @@ import { prisma } from "../db/prisma";
 import { catalogAdapters } from "./registry";
 import { CatalogAdapter } from "./types";
 import { enrichColors } from "./enrich-colors";
+import { classifyCatalog, genderFromStoreValue } from "./classify";
 
 export interface IngestSummary {
   store: string;
@@ -45,6 +46,8 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
           category: p.category,
           inStock: p.inStock ?? true,
           sizes: p.sizes?.join(",") ?? null,
+          storeGender: p.storeGender ?? null,
+          ...(genderFromStoreValue(p.storeGender) ? { gender: genderFromStoreValue(p.storeGender)! } : {}),
         },
         create: {
           storeId: store.id,
@@ -57,6 +60,8 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
           category: p.category,
           inStock: p.inStock ?? true,
           sizes: p.sizes?.join(",") ?? null,
+          storeGender: p.storeGender ?? null,
+          gender: genderFromStoreValue(p.storeGender) ?? "unisex",
         },
       });
     }
@@ -69,6 +74,12 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
     console.log(`[ingest] ${adapter.name}: ${products.length} products (${removed} removed)`);
     summaries.push({ store: adapter.key, fetched: products.length, removed });
   }
+
+  // Category (and gender where it wasn't stated) for anything new.
+  const classified = await classifyCatalog();
+  console.log(
+    `[ingest] categories: ${classified.fromStore} from store data, ${classified.fromLlm} classified, ${classified.unresolved} unresolved`
+  );
 
   // Resolve colours for anything newly added. Existing products keep the
   // colour they already have (the upsert above deliberately leaves the

@@ -1,20 +1,27 @@
 export interface SearchResultItem {
-  store: {
-    key: string;
-    name: string;
-    baseUrl: string;
-    logoUrl: string | null;
-    isLive: boolean;
-  };
+  id: string;
   title: string;
   price: number;
   currency: string;
   url: string;
   imageUrl: string | null;
   inStock: boolean;
-  matchReason: string;
-  isExact: boolean;
   sizes: string | null;
+  color: string | null;
+  categorySlug: string | null;
+  gender: string;
+  score: number;
+}
+
+export interface StoreResults {
+  store: { key: string; name: string; baseUrl: string; logoUrl: string | null };
+  count: number;
+  items: SearchResultItem[];
+}
+
+export interface AppliedFilter {
+  kind: "category" | "size" | "gender" | "color";
+  label: string;
 }
 
 export interface SearchResponse {
@@ -23,11 +30,16 @@ export interface SearchResponse {
   fetchedAt: string;
   cached: boolean;
   llmEnabled: boolean;
-  results: SearchResultItem[];
+  filters: AppliedFilter[];
+  stores: StoreResults[];
+  totalCount: number;
 }
 
-export async function searchProducts(query: string): Promise<SearchResponse> {
-  const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+export async function searchProducts(query: string, dropped: string[] = []): Promise<SearchResponse> {
+  const params = new URLSearchParams({ q: query });
+  if (dropped.length > 0) params.set("drop", dropped.join(","));
+
+  const res = await fetch(`/api/search?${params}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Search failed (${res.status})`);

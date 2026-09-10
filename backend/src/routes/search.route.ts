@@ -10,8 +10,21 @@ searchRoute.get("/search", async (req, res) => {
     return;
   }
 
+  // Filter chips are removable: dropping one re-runs the same search
+  // without that constraint, so a mis-parsed query is fixable by the
+  // shopper instead of just looking like empty stock.
+  const dropped = String(req.query.drop ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const overrides: Record<string, null> = {};
+  if (dropped.includes("category")) overrides.categorySlug = null;
+  if (dropped.includes("size")) overrides.size = null;
+  if (dropped.includes("gender")) overrides.gender = null;
+  if (dropped.includes("color")) overrides.color = null;
+
   try {
-    const result = await search(q);
+    const result = await search(q, overrides);
     res.json(result);
   } catch (err) {
     console.error("[/api/search] failed:", err);

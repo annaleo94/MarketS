@@ -9,6 +9,7 @@ export interface CatalogProduct {
   category?: string;
   inStock?: boolean;
   sizes?: string[];
+  storeGender?: string; // raw gender text from the store, if it states one
 }
 
 // A store integration for the catalog pilot. Unlike a "search this store"

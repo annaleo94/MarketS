@@ -32,6 +32,11 @@ export const env = {
   // and let successive runs finish the backlog.
   ingestMaxVisionCalls: Number(process.env.INGEST_MAX_VISION_CALLS ?? 600),
 
+  // Relevance floor applied after ranking. Deliberately configurable:
+  // it gets tuned against real results, and there is no minimum quota --
+  // if three products clear it, three are shown.
+  searchMinScore: Number(process.env.SEARCH_MIN_SCORE ?? 0.4),
+
   // Optional shared secret for POST /api/admin/ingest. Leave unset for
   // local/dev use.
   adminToken: process.env.ADMIN_TOKEN ?? "",

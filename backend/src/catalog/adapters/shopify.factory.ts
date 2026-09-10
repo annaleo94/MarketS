@@ -20,6 +20,8 @@ interface ShopifyProduct {
   id: number;
   title: string;
   handle: string;
+  vendor?: string;
+  product_type?: string;
   images: ShopifyImage[];
   variants: ShopifyVariant[];
   options?: ShopifyOption[];
@@ -90,8 +92,13 @@ function toCatalogProduct(p: ShopifyProduct, config: ShopifyStoreConfig): Catalo
     currency: "ILS",
     url: `${config.baseUrl}/products/${p.handle}`,
     imageUrl: p.images[0]?.src,
-    category: config.category,
+    // The store's own garment type where it has one -- Fox populates this
+    // properly, Shilav gives every product the same useless value.
+    category: p.product_type || config.category,
     inStock: inStockVariants.length > 0,
     sizes: p.options?.find((o) => /size|מידה/i.test(o.name))?.values,
+    // Fox uses `vendor` for its gender/age segment ("תינוקות בנות");
+    // Shilav uses it for the actual brand, which simply yields no gender.
+    storeGender: p.vendor,
   };
 }

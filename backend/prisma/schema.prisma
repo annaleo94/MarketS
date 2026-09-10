@@ -50,6 +50,12 @@ model Product {
   // Comma-separated size labels as the store lists them ("3M,6M,12M" or
   // "2,3,4"), so an age/size in the query can be matched against stock.
   sizes       String?
+  // Hard-filter fields. categorySlug is a node in catalog/taxonomy.ts;
+  // gender is boys|girls|unisex and defaults to unisex when unknown, so an
+  // unclassified product is shown to everyone rather than hidden.
+  categorySlug String?
+  gender       String  @default("unisex")
+  storeGender  String? // whatever the store itself said, kept for auditing
   // False for colour-blocked/patterned garments, where a single colour name
   // is misleading -- a cream shirt with mustard sleeves is not what someone
   // asking for a white shirt means. Null when unknown.
