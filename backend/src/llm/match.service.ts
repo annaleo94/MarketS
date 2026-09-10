@@ -21,20 +21,80 @@ export interface MatchResult {
 
 const KEYWORD_MATCH_THRESHOLD = 0.35;
 
+// How many candidates per store get sent to the LLM for final selection.
+// A whole store catalog (1000+ items) is ~28k tokens per request, which is
+// both wasteful and larger than some accounts' per-request token ceiling.
+// ~120 titles is a few thousand tokens and still gives the model far more
+// to choose from than it realistically needs.
+const SHORTLIST_SIZE = 120;
+
+// Turns the shopper's free-text description into words that would plausibly
+// appear in a product *title*, so the lexical shortlist below can find
+// candidates even when the description shares no words with the listing
+// ("something warm for winter" -> סריג, קרדיגן, פליז...). One small call,
+// reused for every store.
+export async function expandQueryKeywords(rawQuery: string): Promise<string[]> {
+  if (!env.llmEnabled) return [];
+
+  const response = await completeJson<{ keywords?: string[] }>([
+    {
+      role: "system",
+      content:
+        "אתה עוזר לחיפוש מוצרים בקטלוג בגדי תינוקות וילדים. קבל תיאור חופשי של הלקוח והחזר מילות מפתח שסביר " +
+        "שיופיעו בכותרת של מוצר מתאים בחנות: סוגי הפריט עצמו ומילים נרדפות שלו (למשל 'משהו חם' -> סריג, קרדיגן, " +
+        "פליז, מעיל, חליפה), חומרים, וסגנון. אל תכלול מילים כלליות כמו 'משהו', 'נוח', 'יפה', ואל תכלול גיל. " +
+        'ענה אך ורק ב-JSON: {"keywords": ["...", "..."]} -- עד 12 מילים, בעברית.',
+    },
+    { role: "user", content: rawQuery },
+  ]);
+
+  return Array.isArray(response?.keywords) ? response.keywords.filter((k) => typeof k === "string") : [];
+}
+
 // Finds the single best-matching product for a free-text query within one
 // store's catalog. Tries the LLM first (understands paraphrasing,
 // synonyms, "something warm for a 3-month-old" style descriptions);
 // falls back to keyword overlap if no API key is configured or the LLM
 // call fails, so search still works either way.
-export async function matchInStore(rawQuery: string, products: CatalogEntry[]): Promise<MatchResult | null> {
+export async function matchInStore(
+  rawQuery: string,
+  products: CatalogEntry[],
+  expandedKeywords: string[] = []
+): Promise<MatchResult | null> {
   if (products.length === 0) return null;
 
   if (env.llmEnabled) {
-    const llmResult = await matchWithLlm(rawQuery, products);
+    const candidates = shortlist(rawQuery, expandedKeywords, products, SHORTLIST_SIZE);
+    const llmResult = await matchWithLlm(rawQuery, candidates);
     if (llmResult !== undefined) return llmResult; // undefined = LLM call failed, fall through
   }
 
   return matchWithKeywords(rawQuery, products);
+}
+
+// Ranks the whole catalog against the query and its expanded keywords, and
+// keeps the top `size`. Always returns something (best-effort ordering) --
+// deciding there's no good match is the LLM's job, not this filter's.
+function shortlist(
+  rawQuery: string,
+  expandedKeywords: string[],
+  products: CatalogEntry[],
+  size: number
+): CatalogEntry[] {
+  if (products.length <= size) return products;
+
+  return products
+    .map((product) => {
+      const direct = relevanceScore(rawQuery, product.title);
+      const viaKeywords = expandedKeywords.reduce(
+        (best, keyword) => Math.max(best, relevanceScore(keyword, product.title)),
+        0
+      );
+      return { product, score: Math.max(direct, viaKeywords) };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, size)
+    .map((scored) => scored.product);
 }
 
 interface LlmResponse {

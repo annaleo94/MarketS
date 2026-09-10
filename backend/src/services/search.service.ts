@@ -1,6 +1,6 @@
 import { prisma } from "../db/prisma";
 import { normalizeQuery } from "../scrapers/normalize";
-import { matchInStore, CatalogEntry } from "../llm/match.service";
+import { matchInStore, expandQueryKeywords, CatalogEntry } from "../llm/match.service";
 import { env } from "../env";
 
 export interface SearchResultItem {
@@ -59,6 +59,11 @@ async function matchAcrossStores(rawQuery: string): Promise<SearchResultItem[]> 
     include: { products: true },
   });
 
+  // One small LLM call up front, shared by every store, so each store's
+  // shortlist can catch products whose titles don't share any words with
+  // how the shopper phrased it.
+  const expandedKeywords = await expandQueryKeywords(rawQuery);
+
   const perStore = await Promise.allSettled(
     stores.map(async (store) => {
       const catalog: CatalogEntry[] = store.products.map((p) => ({
@@ -70,7 +75,7 @@ async function matchAcrossStores(rawQuery: string): Promise<SearchResultItem[]> 
         imageUrl: p.imageUrl,
         inStock: p.inStock,
       }));
-      const match = await matchInStore(rawQuery, catalog);
+      const match = await matchInStore(rawQuery, catalog, expandedKeywords);
       if (!match) return null;
 
       const item: SearchResultItem = {

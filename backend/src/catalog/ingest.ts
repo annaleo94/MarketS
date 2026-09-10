@@ -67,6 +67,12 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
     summaries.push({ store: adapter.key, fetched: products.length, removed });
   }
 
+  // Cached searches point at the catalog we just replaced -- their prices
+  // and matches can be stale (or reference products that no longer exist),
+  // so drop them and let the next search resolve against fresh data.
+  const { count: staleSearches } = await prisma.searchCache.deleteMany({});
+  console.log(`[ingest] cleared ${staleSearches} cached search(es)`);
+
   return summaries;
 }
 
