@@ -120,8 +120,21 @@ function check(condition: boolean, label: string, got: unknown, expected: unknow
 }
 
 for (const c of CATEGORY_CASES) {
-  const got = resolveCategory(c.storeCategory, c.title);
+  const got = resolveCategory(c.storeCategory, c.title).slug;
   check(got === c.expect, `[category] ${c.note} -- "${c.title}" (store: ${c.storeCategory})`, got, c.expect);
+}
+
+// resolveCategory's `source` is what enrich-category.ts's low-confidence
+// vision follow-up and any future audit key off of -- worth locking down
+// directly, not just the slug it resolves to.
+const SOURCE_CASES: { title: string; storeCategory: string | null; expect: "store" | "title" | null }[] = [
+  { title: "חולצת טריקו כחולה", storeCategory: "חולצות", expect: "store" },
+  { title: "חגורה קלאסית בנים", storeCategory: "מכנסיים", expect: "title" }, // the override wins on title
+  { title: "פריט מיוחד לחג", storeCategory: null, expect: null }, // names no garment at all -- falls to text-llm/vision
+];
+for (const c of SOURCE_CASES) {
+  const got = resolveCategory(c.storeCategory, c.title).source;
+  check(got === c.expect, `[category source] "${c.title}" (store: ${c.storeCategory})`, got, c.expect);
 }
 
 for (const c of LEG_STYLE_CASES) {
@@ -140,7 +153,7 @@ for (const slug of ["belts", "outerwear", "bodysuit", "swimwear", "leggings", "l
   check(categoryFromText(slug) !== undefined, `[sanity] categoryFromText doesn't throw on "${slug}"`, "ok", "ok");
 }
 
-const total = CATEGORY_CASES.length + LEG_STYLE_CASES.length + AMBIGUOUS_COLOR_CASES.length;
+const total = CATEGORY_CASES.length + SOURCE_CASES.length + LEG_STYLE_CASES.length + AMBIGUOUS_COLOR_CASES.length;
 if (failures > 0) {
   console.error(`\n${failures}/${total} regression cases FAILED.`);
   process.exit(1);

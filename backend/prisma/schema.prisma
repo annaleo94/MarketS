@@ -47,6 +47,11 @@ model Product {
   // so colour searches can reach that inventory too. See catalog/colors.ts.
   color       String?
   colorSource String? // "title" | "vision" | "none" (looked at the photo, couldn't tell)
+  // 0..1, set only when colorSource is "vision" -- a title match is a plain
+  // keyword hit, not a probabilistic guess, so it has no meaningful
+  // confidence score. Not yet used to filter or gate anything; captured so
+  // low-confidence rows can be found and reviewed once that exists.
+  colorConfidence Float?
   // Multipacks ("מארז 3 בגדי גוף") are one listing holding several garments
   // in different colours, so a single `color` can't describe them: this
   // holds every colour in the pack, comma-separated, and `color` is the
@@ -59,6 +64,16 @@ model Product {
   // gender is boys|girls|unisex and defaults to unisex when unknown, so an
   // unclassified product is shown to everyone rather than hidden.
   categorySlug String?
+  // "store" | "title" (both deterministic alias matches, see
+  // classify.ts's resolveCategory) | "text-llm" | "vision". Lets a
+  // probabilistic source be told apart from an exact rule match, and is
+  // what enrich-category.ts's low-confidence vision follow-up keys off of.
+  categorySource String?
+  // 0..1, set only for "text-llm"/"vision" sources -- same reasoning as
+  // colorConfidence: a deterministic alias match isn't a probabilistic
+  // guess. Read by enrich-category.ts to decide whether a text-LLM answer
+  // is trustworthy enough to skip the (slower, costlier) vision look.
+  categoryConfidence Float?
   gender       String  @default("unisex")
   storeGender  String? // whatever the store itself said, kept for auditing
   // False for colour-blocked/patterned garments, where a single colour name
@@ -72,6 +87,7 @@ model Product {
   // LEG_STYLE_CATEGORIES (see catalog/taxonomy.ts); "footed" | "footless".
   legStyle       String?
   legStyleSource String? // "title" | "vision" | "none" (looked, couldn't tell)
+  legStyleConfidence Float? // 0..1, set only when legStyleSource is "vision"
   updatedAt  DateTime @updatedAt
   createdAt  DateTime @default(now())
 

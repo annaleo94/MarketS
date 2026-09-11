@@ -3,6 +3,7 @@ import { catalogAdapters } from "./registry";
 import { CatalogAdapter } from "./types";
 import { enrichColors } from "./enrich-colors";
 import { enrichLegStyles } from "./enrich-leg-style";
+import { enrichCategoriesFromImages } from "./enrich-category";
 import { classifyCatalog, genderFromStoreValue } from "./classify";
 
 export interface IngestSummary {
@@ -91,11 +92,19 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
     console.log(`[ingest] removed store ${store.key} (no longer configured): ${deletedProducts} products deleted`);
   }
 
-  // Category (and gender where it wasn't stated) for anything new.
+  // Category (and gender where it wasn't stated) for anything new -- store
+  // data, then a title match, then a cheap text-only LLM guess for whatever
+  // neither resolves.
   const classified = await classifyCatalog();
   console.log(
     `[ingest] categories: ${classified.fromStore} from store data, ${classified.fromLlm} classified, ${classified.unresolved} unresolved`
   );
+
+  // A second, per-product look at the photo for whatever the text pass
+  // left null or only guessed at with low confidence -- title text alone
+  // isn't always enough to name a garment type, but the picture usually is.
+  const categoryVision = await enrichCategoriesFromImages();
+  console.log(`[ingest] categories from photos: ${categoryVision.resolved} resolved, ${categoryVision.unresolved} still unresolved`);
 
   // Resolve colours for anything newly added. Existing products keep the
   // colour they already have (the upsert above deliberately leaves the

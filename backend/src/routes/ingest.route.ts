@@ -70,9 +70,17 @@ ingestRoute.post("/admin/ingest", async (req, res) => {
         console.log(`[ingest] cleared ${count} leg style value(s) for re-detection`);
       }
       if (reclassify) {
+        // categorySource/categoryConfidence have to go too, not just the
+        // slug -- enrich-category.ts's vision follow-up decides whether a
+        // row still needs a look by checking categorySource, so a stale
+        // value surviving the reset would leave it permanently invisible
+        // to every stage of the pipeline (classifyCatalog only requeues on
+        // categorySlug being null, which this does clear, but a row that
+        // then fails to resolve there again would silently fall through
+        // enrichCategoriesFromImages' own query too).
         const { count } = await prisma.product.updateMany({
           where: { categorySlug: { not: null } },
-          data: { categorySlug: null },
+          data: { categorySlug: null, categorySource: null, categoryConfidence: null },
         });
         console.log(`[ingest] cleared ${count} categor${count === 1 ? "y" : "ies"} for reclassification`);
       }

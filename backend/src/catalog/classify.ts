@@ -75,31 +75,52 @@ const TITLE_OVERRIDES_STORE_FAMILIES = new Set(["accessories", "outerwear", "bod
 const LEGGINGS_SLUGS = new Set(["leggings", "leggings-short", "leggings-long"]);
 const GENERIC_BOTTOMS_SLUGS = new Set(["bottoms", "shorts", "pants"]);
 
-export function resolveCategory(storeValue: string | null | undefined, title: string): string | null {
+export type CategorySource = "store" | "title" | "text-llm" | "vision";
+
+export interface CategoryResolution {
+  slug: string | null;
+  // Which signal actually won -- "store" or "title" for a deterministic
+  // alias match (including the two override cases above, which are still
+  // exact rule matches on the title, not a guess). Null slug means neither
+  // resolved it.
+  source: CategorySource | null;
+}
+
+export function resolveCategory(storeValue: string | null | undefined, title: string): CategoryResolution {
   const fromStore = categoryFromStoreValue(storeValue);
   const fromTitle = categoryFromText(title);
   if (fromTitle) {
     const titleFamily = categoryFamily(fromTitle);
     if (TITLE_OVERRIDES_STORE_FAMILIES.has(titleFamily) && categoryFamily(fromStore ?? "") !== titleFamily) {
-      return fromTitle;
+      return { slug: fromTitle, source: "title" };
     }
     if (LEGGINGS_SLUGS.has(fromTitle) && fromStore && GENERIC_BOTTOMS_SLUGS.has(fromStore)) {
-      return fromTitle;
+      return { slug: fromTitle, source: "title" };
     }
   }
-  return fromStore ?? fromTitle;
+  if (fromStore) return { slug: fromStore, source: "store" };
+  if (fromTitle) return { slug: fromTitle, source: "title" };
+  return { slug: null, source: null };
 }
 
 interface Classified {
   id: string;
   category?: string;
   gender?: Gender;
+  confidence?: number;
 }
 
 // Small enough that the reply comfortably fits the token budget below:
 // one truncated response loses the whole batch.
 const BATCH_SIZE = 25;
-const CLASSIFY_MAX_TOKENS = 2500;
+const CLASSIFY_MAX_TOKENS = 3000;
+
+// A text-LLM category answer below this is treated as a guess worth a
+// second, more expensive look at the actual photo (see
+// enrich-category.ts) rather than trusted outright -- category is a hard
+// filter, so a wrong value doesn't rank a product badly, it deletes it
+// from results it belongs in.
+export const LOW_CATEGORY_CONFIDENCE = 0.6;
 
 // A product selected at the top of classifyCatalog() can be gone by the
 // time its own turn to be updated comes around -- deleted by a store's own
@@ -122,7 +143,9 @@ export async function updateIfStillThere(id: string, data: Record<string, unknow
 
 // Classifies whatever is still missing a category, in batches -- one call
 // per batch rather than per product, which keeps a 1,500-product
-// catalogue to a few dozen cheap text calls.
+// catalogue to a few dozen cheap text calls. This is the cheap first pass;
+// enrich-category.ts follows it with a per-product vision look at whatever
+// this still leaves null or answers with low confidence.
 export async function classifyCatalog(): Promise<{ fromStore: number; fromLlm: number; unresolved: number }> {
   const pending = await prisma.product.findMany({
     where: { categorySlug: null },
@@ -137,9 +160,9 @@ export async function classifyCatalog(): Promise<{ fromStore: number; fromLlm: n
     // fallback, since "חולצה ארוכה עם הדפס" names its own garment type --
     // unless the two flatly disagree on the garment family, in which case
     // the title wins (see resolveCategory).
-    const slug = resolveCategory(product.category, product.title);
+    const { slug, source } = resolveCategory(product.category, product.title);
     if (slug) {
-      if (await updateIfStillThere(product.id, { categorySlug: slug })) fromStore += 1;
+      if (await updateIfStillThere(product.id, { categorySlug: slug, categorySource: source })) fromStore += 1;
     } else {
       needsLlm.push({ id: product.id, title: product.title });
     }
@@ -153,7 +176,13 @@ export async function classifyCatalog(): Promise<{ fromStore: number; fromLlm: n
 
       for (const item of classified) {
         if (!item.category || !isKnownCategory(item.category)) continue;
-        const data = { categorySlug: item.category, ...(item.gender ? { gender: item.gender } : {}) };
+        const confidence = typeof item.confidence === "number" ? Math.max(0, Math.min(1, item.confidence)) : 0.5;
+        const data = {
+          categorySlug: item.category,
+          categorySource: "text-llm" as const,
+          categoryConfidence: confidence,
+          ...(item.gender ? { gender: item.gender } : {}),
+        };
         if (await updateIfStillThere(item.id, data)) fromLlm += 1;
       }
     }
@@ -170,12 +199,14 @@ async function classifyBatch(batch: { id: string; title: string }[]): Promise<Cl
     {
       role: "system",
       content:
-        "אתה מסווג מוצרי ביגוד לתינוקות וילדים. לכל מוצר ברשימה החזר את הקטגוריה והמגדר. " +
+        "אתה מסווג מוצרי ביגוד לתינוקות וילדים. לכל מוצר ברשימה החזר את הקטגוריה, המגדר ורמת הביטחון שלך. " +
         `הקטגוריה חייבת להיות בדיוק אחד מהערכים: ${CATEGORIES.map((c) => c.slug).join(", ")}. ` +
         "בחר את הקטגוריה הספציפית ביותר שמתאימה (למשל swim-shorts ולא swimwear, shirt-long ולא tops). " +
         'המגדר: "girls" רק אם ברור שזה לבנות, "boys" רק אם ברור שזה לבנים, אחרת "unisex". ' +
         'שים לב: בעברית "לבנות" יכול להיות גם צבע לבן ברבים -- אל תסיק מגדר ממנו כשמדובר בצבע. ' +
-        'ענה אך ורק ב-JSON: {"items": [{"id": "<המזהה>", "category": "<slug>", "gender": "girls|boys|unisex"}]}',
+        "confidence: מספר בין 0 ל-1 -- כמה אתה בטוח בסיווג הקטגוריה על סמך הכותרת בלבד. " +
+        "כותרת עמומה או כללית מדי (בלי לציין סוג בגד ברור) צריכה לקבל confidence נמוך, לא לנחש בביטחון. " +
+        'ענה אך ורק ב-JSON: {"items": [{"id": "<המזהה>", "category": "<slug>", "gender": "girls|boys|unisex", "confidence": <0-1>}]}',
     },
     { role: "user", content: list },
   ], 40000, CLASSIFY_MAX_TOKENS);

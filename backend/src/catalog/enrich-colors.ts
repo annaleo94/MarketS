@@ -52,7 +52,7 @@ export async function enrichColors(): Promise<{ fromTitle: number; fromVision: n
         // and found no garment is recorded as settled.
         if (!result) continue;
         if (result.colors.length === 0) {
-          await updateIfStillThere(slice[j].id, { colorSource: "none" });
+          await updateIfStillThere(slice[j].id, { colorSource: "none", colorConfidence: 0 });
           continue;
         }
         const updated = await updateIfStillThere(slice[j].id, {
@@ -60,6 +60,7 @@ export async function enrichColors(): Promise<{ fromTitle: number; fromVision: n
           colors: result.colors.join(","),
           colorSource: "vision",
           colorIsSolid: result.isSolid,
+          colorConfidence: result.confidence,
         });
         if (updated) fromVision += 1;
       }
@@ -72,6 +73,7 @@ export async function enrichColors(): Promise<{ fromTitle: number; fromVision: n
 interface DetectedGarment {
   color?: string | null;
   isSolid?: boolean;
+  confidence?: number;
 }
 
 // Asks for one row per garment in the photo. A multipack shot shows two or
@@ -79,7 +81,9 @@ interface DetectedGarment {
 // made the model answer with a bare array instead -- which parsed fine as
 // JSON but had no `color` on it, so every multipack in the catalogue came
 // back unresolved and was retried on every ingest, forever.
-async function detectColorFromImage(imageUrl: string): Promise<{ colors: string[]; isSolid: boolean } | null> {
+async function detectColorFromImage(
+  imageUrl: string
+): Promise<{ colors: string[]; isSolid: boolean; confidence: number } | null> {
   const response = await completeJsonAboutImage<{ items?: DetectedGarment[] } | DetectedGarment[]>(
     `זו תמונה של פריט לבוש לתינוקות/ילדים מאתר חנות. התעלם מהרקע ומהדוגמן/ית. ` +
       `אם התמונה מציגה מארז של כמה בגדים, החזר שורה נפרדת לכל בגד במארז. ` +
@@ -87,8 +91,9 @@ async function detectColorFromImage(imageUrl: string): Promise<{ colors: string[
       `1) color -- הצבע העיקרי של הבגד עצמו, בדיוק אחד מהערכים: ${CANONICAL_COLORS.join(", ")}. ` +
       `2) isSolid -- false אם יש בבגד שילוב צבעים משמעותי, למשל שרוולים בצבע אחר מהגוף, ` +
       `פסים, או הדפס גדול שמכסה חלק ניכר מהבגד. הדפס קטן על החזה עדיין נחשב אחיד. ` +
+      `3) confidence -- מספר בין 0 ל-1, כמה אתה בטוח בצבע שזיהית. ` +
       `אם התמונה לא מציגה בגד כלל או שהצבע לא ברור, החזר רשימה ריקה. ` +
-      `ענה אך ורק ב-JSON: {"items": [{"color": "<צבע>", "isSolid": true|false}]}`,
+      `ענה אך ורק ב-JSON: {"items": [{"color": "<צבע>", "isSolid": true|false, "confidence": <0-1>}]}`,
     imageUrl
   );
 
@@ -98,9 +103,13 @@ async function detectColorFromImage(imageUrl: string): Promise<{ colors: string[
   if (!Array.isArray(garments)) return null;
 
   const colors: string[] = [];
+  const confidences: number[] = [];
   for (const garment of garments) {
     const color = normalizeColorName(garment?.color);
-    if (color && !colors.includes(color)) colors.push(color);
+    if (color && !colors.includes(color)) {
+      colors.push(color);
+      confidences.push(typeof garment?.confidence === "number" ? Math.max(0, Math.min(1, garment.confidence)) : 0.5);
+    }
   }
 
   // An empty set here is a real answer -- the model looked and saw no
@@ -109,5 +118,8 @@ async function detectColorFromImage(imageUrl: string): Promise<{ colors: string[
   // A pack of differently-coloured garments is not a solid-coloured item,
   // whatever the individual garments are.
   const isSolid = colors.length === 1 && garments.every((g) => g?.isSolid !== false);
-  return { colors, isSolid };
+  // The record covers every colour in the pack, so its confidence is only
+  // as good as the shakiest garment in it, not just the first one.
+  const confidence = confidences.length > 0 ? Math.min(...confidences) : 0.5;
+  return { colors, isSolid, confidence };
 }

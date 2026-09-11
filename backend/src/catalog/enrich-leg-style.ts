@@ -45,15 +45,16 @@ export async function enrichLegStyles(): Promise<{ fromTitle: number; fromVision
       const slice = batch.slice(i, i + VISION_CONCURRENCY);
       const detected = await Promise.all(slice.map((p) => detectLegStyleFromImage(p.imageUrl!)));
 
-      for (const [j, legStyle] of detected.entries()) {
-        // null means the call itself never came back -- left alone so the
-        // next run retries it, same distinction enrich-colors.ts draws.
-        if (legStyle === undefined) continue;
+      for (const [j, result] of detected.entries()) {
+        // undefined means the call itself never came back -- left alone so
+        // the next run retries it, same distinction enrich-colors.ts draws.
+        if (result === undefined) continue;
         const updated = await updateIfStillThere(slice[j].id, {
-          legStyle,
-          legStyleSource: legStyle ? "vision" : "none",
+          legStyle: result.legStyle,
+          legStyleSource: "vision",
+          legStyleConfidence: result.confidence,
         });
-        if (updated && legStyle) fromVision += 1;
+        if (updated && result.legStyle) fromVision += 1;
       }
     }
   }
@@ -63,6 +64,7 @@ export async function enrichLegStyles(): Promise<{ fromTitle: number; fromVision
 
 interface DetectedLegStyle {
   hasFeet?: boolean | null;
+  confidence?: number;
 }
 
 // Asks specifically about foot coverage -- not colour, not garment type --
@@ -70,17 +72,21 @@ interface DetectedLegStyle {
 // narrower time. "footed" means the leg openings close over the foot
 // (an integrated sock/bootie, no separate ankle opening); "footless" means
 // the garment ends at or above the ankle, open feet.
-async function detectLegStyleFromImage(imageUrl: string): Promise<LegStyle | null | undefined> {
+async function detectLegStyleFromImage(
+  imageUrl: string
+): Promise<{ legStyle: LegStyle | null; confidence: number } | undefined> {
   const response = await completeJsonAboutImage<DetectedLegStyle>(
     `זו תמונה של אוברול או מכנסיים לתינוקות/ילדים מאתר חנות. התעלם מהרקע ומהדוגמן/ית. ` +
       `יש לבדוק רק דבר אחד: האם הבגד סגור מעל כפות הרגליים (כמו גרב/בוטי מובנה, בלי פתח קרסול נפרד) -- ` +
       `hasFeet=true, או שהוא נגמר בקרסול או מעליו עם כפות הרגליים חשופות -- hasFeet=false. ` +
       `אם לא ניתן לקבוע מהתמונה (התמונה לא מראה את קצה הרגליים, זווית לא ברורה וכו'), החזר hasFeet=null. ` +
-      `ענה אך ורק ב-JSON: {"hasFeet": true|false|null}`,
+      `confidence: מספר בין 0 ל-1, כמה אתה בטוח בקביעה. ` +
+      `ענה אך ורק ב-JSON: {"hasFeet": true|false|null, "confidence": <0-1>}`,
     imageUrl
   );
 
   if (!response || typeof response.hasFeet === "undefined") return undefined; // call never came back
-  if (response.hasFeet === null) return null; // looked, genuinely couldn't tell
-  return response.hasFeet ? "footed" : "footless";
+  const confidence = typeof response.confidence === "number" ? Math.max(0, Math.min(1, response.confidence)) : 0.5;
+  if (response.hasFeet === null) return { legStyle: null, confidence: 0 }; // looked, genuinely couldn't tell
+  return { legStyle: response.hasFeet ? "footed" : "footless", confidence };
 }
