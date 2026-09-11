@@ -4,6 +4,7 @@ import { env } from "../../env";
 
 interface ShopifyVariant {
   price: string;
+  compare_at_price?: string | null; // the store's pre-discount price, when it publishes one
   available: boolean;
 }
 
@@ -107,10 +108,18 @@ function toCatalogProduct(p: ShopifyProduct, config: ShopifyStoreConfig): Catalo
 
   const price = Math.min(...pricedVariants.map((v) => Number(v.price)));
 
+  // `price` is the cheapest variant, so the "before" price has to come
+  // from that same variant to be comparable -- taking the highest
+  // compare_at_price across a mixed-price product would invent a discount
+  // that isn't on offer for the size being quoted.
+  const cheapest = pricedVariants.find((v) => Number(v.price) === price);
+  const listPrice = Number(cheapest?.compare_at_price);
+
   return {
     externalId: String(p.id),
     title: p.title,
     price,
+    ...(Number.isFinite(listPrice) && listPrice > 0 ? { listPrice } : {}),
     currency: "ILS",
     url: `${config.baseUrl}/products/${p.handle}`,
     imageUrl: p.images[0]?.src,

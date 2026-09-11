@@ -5,12 +5,28 @@ import { enrichColors } from "./enrich-colors";
 import { enrichLegStyles } from "./enrich-leg-style";
 import { enrichCategoriesFromImages } from "./enrich-category";
 import { classifyCatalog, genderFromStoreValue } from "./classify";
+import { diffProduct, diffDelisted, DetectedEvent, ProductEventKind } from "./history";
 
 export interface IngestSummary {
   store: string;
   fetched: number;
-  removed: number;
+  removed: number; // now "delisted": the row is kept, just marked as gone
+  changes: Partial<Record<ProductEventKind, number>>;
 }
+
+// A crawl that comes back with a fraction of what the store had last time
+// is far more likely to be a broken selector, a rate limit, or a partial
+// page than a real clearance. Delisting on that would wipe most of a
+// store out of search in one run, so below this share of what we already
+// have on file, the delist step is skipped entirely and the run says so.
+const MIN_FEED_COMPLETENESS = 0.5;
+
+// How many consecutive syncs may miss a product before it counts as gone.
+// Measured, not guessed: two Castro crawls three hours apart returned
+// 1,014 and 973 products with no real inventory event between them, so
+// one miss is well within normal crawl noise and delisting on it would
+// flap ~40 products in and out of search on every run.
+const MISSED_SYNCS_BEFORE_DELIST = 3;
 
 // Pulls every configured store's catalog and upserts it into the DB,
 // removing products that disappeared from the store since the last run
@@ -32,49 +48,134 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
       products = await adapter.fetchCatalog();
     } catch (err) {
       console.error(`[ingest] ${adapter.key} failed:`, (err as Error).message);
-      summaries.push({ store: adapter.key, fetched: 0, removed: 0 });
+      summaries.push({ store: adapter.key, fetched: 0, removed: 0, changes: {} });
       continue;
     }
 
+    // Everything we already hold for this store, in one query -- the diff
+    // below needs the previous price/stock of every product, and reading
+    // them back one at a time would double an already-slow loop.
+    const existing = await prisma.product.findMany({
+      where: { storeId: store.id },
+      select: {
+        id: true,
+        externalId: true,
+        price: true,
+        inStock: true,
+        listPrice: true,
+        lowestPrice: true,
+        highestPrice: true,
+        delistedAt: true,
+        missedSyncs: true,
+      },
+    });
+    const stored = new Map(existing.map((p) => [p.externalId, p]));
+
+    const now = new Date();
+    const changes: Partial<Record<ProductEventKind, number>> = {};
+    const pendingEvents: { productId: string; event: DetectedEvent }[] = [];
+    const record = (productId: string, events: DetectedEvent[]) => {
+      for (const event of events) {
+        changes[event.kind] = (changes[event.kind] ?? 0) + 1;
+        pendingEvents.push({ productId, event });
+      }
+    };
+
     for (const p of products) {
-      await prisma.product.upsert({
+      const before = stored.get(p.externalId) ?? null;
+      const { events, update } = diffProduct(
+        before,
+        { price: p.price, inStock: p.inStock ?? true, listPrice: p.listPrice },
+        now
+      );
+
+      const shared = {
+        title: p.title,
+        price: p.price,
+        currency: p.currency ?? "ILS",
+        url: p.url,
+        imageUrl: p.imageUrl,
+        category: p.category,
+        inStock: p.inStock ?? true,
+        sizes: p.sizes?.join(",") ?? null,
+        storeGender: p.storeGender ?? null,
+        missedSyncs: 0, // seen this run, so any earlier misses were crawl noise
+        ...update,
+      };
+
+      const saved = await prisma.product.upsert({
         where: { storeId_externalId: { storeId: store.id, externalId: p.externalId } },
         update: {
-          title: p.title,
-          price: p.price,
-          currency: p.currency ?? "ILS",
-          url: p.url,
-          imageUrl: p.imageUrl,
-          category: p.category,
-          inStock: p.inStock ?? true,
-          sizes: p.sizes?.join(",") ?? null,
-          storeGender: p.storeGender ?? null,
+          ...shared,
           ...(genderFromStoreValue(p.storeGender) ? { gender: genderFromStoreValue(p.storeGender)! } : {}),
         },
         create: {
+          ...shared,
           storeId: store.id,
           externalId: p.externalId,
-          title: p.title,
-          price: p.price,
-          currency: p.currency ?? "ILS",
-          url: p.url,
-          imageUrl: p.imageUrl,
-          category: p.category,
-          inStock: p.inStock ?? true,
-          sizes: p.sizes?.join(",") ?? null,
-          storeGender: p.storeGender ?? null,
+          firstSeenAt: now,
           gender: genderFromStoreValue(p.storeGender) ?? "unisex",
         },
+        select: { id: true },
+      });
+
+      record(saved.id, events);
+    }
+
+    // Anything on file the feed no longer lists. Marked, not deleted --
+    // deleting would take its price history with it, and then a product
+    // that comes back could never be recognised as having come back.
+    const seenIds = new Set(products.map((p) => p.externalId));
+    const missing = existing.filter((p) => !seenIds.has(p.externalId) && !p.delistedAt);
+    const completeness = existing.length > 0 ? products.length / existing.length : 1;
+
+    let delisted = 0;
+    if (missing.length > 0 && completeness < MIN_FEED_COMPLETENESS) {
+      console.warn(
+        `[ingest] ${adapter.key}: feed returned ${products.length} against ${existing.length} on file ` +
+          `(${Math.round(completeness * 100)}%) -- skipping the delist step, this looks like a partial crawl, not a clearance`
+      );
+    } else {
+      for (const p of missing) {
+        const missedSyncs = p.missedSyncs + 1;
+        // Still inside the noise window: count the miss and leave the
+        // product listed, so normal crawl jitter doesn't pull real stock
+        // out of search and back in again on every run.
+        if (missedSyncs < MISSED_SYNCS_BEFORE_DELIST) {
+          await prisma.product.update({ where: { id: p.id }, data: { missedSyncs } });
+          continue;
+        }
+        await prisma.product.update({
+          where: { id: p.id },
+          data: { delistedAt: now, inStock: false, missedSyncs },
+        });
+        record(p.id, diffDelisted(p));
+        delisted += 1;
+      }
+    }
+
+    if (pendingEvents.length > 0) {
+      await prisma.productEvent.createMany({
+        data: pendingEvents.map(({ productId, event }) => ({
+          productId,
+          kind: event.kind,
+          oldPrice: event.oldPrice ?? null,
+          newPrice: event.newPrice ?? null,
+          listPrice: event.listPrice ?? null,
+          observedAt: now,
+        })),
       });
     }
 
-    const seenIds = products.map((p) => p.externalId);
-    const { count: removed } = await prisma.product.deleteMany({
-      where: { storeId: store.id, externalId: { notIn: seenIds } },
-    });
-
-    console.log(`[ingest] ${adapter.name}: ${products.length} products (${removed} removed)`);
-    summaries.push({ store: adapter.key, fetched: products.length, removed });
+    const changeSummary = Object.entries(changes)
+      .filter(([kind]) => kind !== "listed")
+      .map(([kind, n]) => `${n} ${kind}`)
+      .join(", ");
+    console.log(
+      `[ingest] ${adapter.name}: ${products.length} products (${delisted} delisted)` +
+        (changeSummary ? ` -- ${changeSummary}` : "")
+    );
+    summaries.push({ store: adapter.key, fetched: products.length, removed: delisted, changes });
   }
 
   // A store dropped from the registry (an adapter removed, or reverted

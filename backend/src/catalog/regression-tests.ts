@@ -19,6 +19,7 @@
 import { resolveCategory } from "./classify";
 import { categoryFromText, legStyleFromText } from "./taxonomy";
 import { suppressAmbiguousWhiteForGirls } from "../search/parse-query";
+import { diffProduct, diffDelisted, StoredProduct } from "./history";
 
 interface CategoryCase {
   title: string;
@@ -147,13 +148,106 @@ for (const c of AMBIGUOUS_COLOR_CASES) {
   check(got === c.expect, `[ambiguous color] ${c.note} -- "${c.raw}"`, got, c.expect);
 }
 
+// --- price / availability history -----------------------------------
+// The rules behind "היה במבצע", "ירד במחיר" and "חזר למלאי". Pure
+// functions, so the guarantees a shopper would actually notice are
+// checked here rather than only being observable after a live sync.
+const stored = (over: Partial<StoredProduct> = {}): StoredProduct => ({
+  price: 100,
+  inStock: true,
+  listPrice: null,
+  lowestPrice: 100,
+  highestPrice: 100,
+  delistedAt: null,
+  ...over,
+});
+const NOW = new Date("2026-01-01T00:00:00Z");
+const kinds = (s: StoredProduct | null, o: Parameters<typeof diffProduct>[1]) =>
+  diffProduct(s, o, NOW).events.map((e) => e.kind).sort().join(",");
+
+const HISTORY_CASES: { got: string; expect: string; note: string }[] = [
+  { got: kinds(null, { price: 80, inStock: true }), expect: "listed", note: "first sighting" },
+  {
+    got: kinds(null, { price: 80, inStock: true, listPrice: 120 }),
+    expect: "listed,sale-start",
+    note: "first sighting of something already discounted records the sale too",
+  },
+  { got: kinds(stored(), { price: 80, inStock: true }), expect: "price-drop", note: "price went down" },
+  { got: kinds(stored(), { price: 120, inStock: true }), expect: "price-rise", note: "price went up" },
+  { got: kinds(stored(), { price: 100, inStock: true }), expect: "", note: "nothing changed -- no event at all" },
+  {
+    got: kinds(stored(), { price: 100.004, inStock: true }),
+    expect: "",
+    note: "float noise under half an agora is not a price change",
+  },
+  {
+    got: kinds(stored(), { price: 100, inStock: true, listPrice: 150 }),
+    expect: "sale-start",
+    note: "store started advertising a 'before' price without moving the price itself",
+  },
+  {
+    got: kinds(stored({ listPrice: 150 }), { price: 100, inStock: true }),
+    expect: "sale-end",
+    note: "the 'before' price went away",
+  },
+  {
+    got: kinds(stored(), { price: 100, inStock: true, listPrice: 90 }),
+    expect: "",
+    note: "a 'before' price BELOW the real price is not a discount",
+  },
+  {
+    got: kinds(stored(), { price: 100, inStock: true, listPrice: 100 }),
+    expect: "",
+    note: "a 'before' price equal to the real price is not a discount either",
+  },
+  { got: kinds(stored(), { price: 100, inStock: false }), expect: "out-of-stock", note: "sold out" },
+  {
+    got: kinds(stored({ inStock: false }), { price: 100, inStock: true }),
+    expect: "back-in-stock",
+    note: "restocked",
+  },
+  {
+    got: kinds(stored({ delistedAt: NOW, inStock: false }), { price: 90, inStock: true }),
+    expect: "price-drop,relisted",
+    note: "came back cheaper -- relist plus the price move, but no duplicate stock event",
+  },
+  {
+    got: diffDelisted(stored()).map((e) => e.kind).join(","),
+    expect: "delisted",
+    note: "left the feed",
+  },
+  {
+    got: diffDelisted(stored({ delistedAt: NOW })).map((e) => e.kind).join(","),
+    expect: "",
+    note: "still missing is not news -- only the first disappearance is an event",
+  },
+];
+for (const c of HISTORY_CASES) {
+  check(c.got === c.expect, `[history] ${c.note}`, c.got, c.expect);
+}
+
+// The running min/max is what a "lowest price we've seen" claim rests on,
+// so it gets its own check rather than riding on the event list.
+const range = diffProduct(stored({ lowestPrice: 70, highestPrice: 130 }), { price: 60, inStock: true }, NOW).update;
+check(range.lowestPrice === 60, "[history] a new low updates lowestPrice", range.lowestPrice, 60);
+check(range.highestPrice === 130, "[history] a new low leaves highestPrice alone", range.highestPrice, 130);
+check(range.previousPrice === 100, "[history] previousPrice keeps the price we just replaced", range.previousPrice, 100);
+
 // A quick sanity check that the taxonomy itself hasn't silently lost a
 // category a lot of the fixes above depend on existing.
 for (const slug of ["belts", "outerwear", "bodysuit", "swimwear", "leggings", "leggings-short", "leggings-long", "tops", "bottoms"]) {
   check(categoryFromText(slug) !== undefined, `[sanity] categoryFromText doesn't throw on "${slug}"`, "ok", "ok");
 }
 
-const total = CATEGORY_CASES.length + SOURCE_CASES.length + LEG_STYLE_CASES.length + AMBIGUOUS_COLOR_CASES.length;
+// +3 for the lowest/highest/previousPrice checks, which are asserted
+// directly rather than through a case table.
+const total =
+  CATEGORY_CASES.length +
+  SOURCE_CASES.length +
+  LEG_STYLE_CASES.length +
+  AMBIGUOUS_COLOR_CASES.length +
+  HISTORY_CASES.length +
+  3;
 if (failures > 0) {
   console.error(`\n${failures}/${total} regression cases FAILED.`);
   process.exit(1);

@@ -8,6 +8,7 @@ import { storesRoute } from "./routes/stores.route";
 import { ingestRoute } from "./routes/ingest.route";
 import { prisma } from "./db/prisma";
 import { runIngest } from "./catalog/ingest";
+import { startScheduler } from "./catalog/scheduler";
 
 async function main() {
   const app = express();
@@ -40,6 +41,8 @@ async function main() {
     console.log("[boot] catalog is empty, running initial ingest in the background (or run `npm run ingest` yourself)...");
     runIngest().catch((err) => console.error("[boot] initial ingest failed:", err));
   }
+
+  startScheduler();
 }
 
 main().catch((err) => {

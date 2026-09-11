@@ -1,9 +1,60 @@
 import { Router } from "express";
-import { runIngest } from "../catalog/ingest";
+import { runSync } from "../catalog/scheduler";
 import { prisma } from "../db/prisma";
 import { env } from "../env";
 
 export const ingestRoute = Router();
+
+// What the sync has actually been doing: the last runs, and the most
+// recent price/stock movements across the catalog. Answers "is the
+// scheduler alive and is it finding anything" from data rather than from
+// container logs, and is the read side of the history the sync records.
+ingestRoute.get("/admin/sync-status", async (req, res) => {
+  if (env.adminToken && req.header("X-Admin-Token") !== env.adminToken) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const [runs, recentEvents, eventTotals] = await Promise.all([
+    prisma.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 10 }),
+    prisma.productEvent.findMany({
+      where: { kind: { not: "listed" } },
+      orderBy: { observedAt: "desc" },
+      take: 25,
+      include: { product: { select: { title: true, url: true, store: { select: { name: true } } } } },
+    }),
+    prisma.productEvent.groupBy({ by: ["kind"], _count: { kind: true } }),
+  ]);
+
+  res.json({
+    intervalHours: env.syncIntervalHours,
+    runs: runs.map((r) => ({
+      trigger: r.trigger,
+      startedAt: r.startedAt,
+      finishedAt: r.finishedAt,
+      minutes: r.finishedAt ? +((r.finishedAt.getTime() - r.startedAt.getTime()) / 60000).toFixed(1) : null,
+      newProducts: r.newProducts,
+      priceDrops: r.priceDrops,
+      priceRises: r.priceRises,
+      backInStock: r.backInStock,
+      outOfStock: r.outOfStock,
+      delisted: r.delisted,
+      relisted: r.relisted,
+      error: r.error,
+    })),
+    eventTotals: Object.fromEntries(eventTotals.map((e) => [e.kind, e._count.kind])),
+    recentEvents: recentEvents.map((e) => ({
+      kind: e.kind,
+      store: e.product.store.name,
+      title: e.product.title,
+      oldPrice: e.oldPrice,
+      newPrice: e.newPrice,
+      listPrice: e.listPrice,
+      observedAt: e.observedAt,
+      url: e.product.url,
+    })),
+  });
+});
 
 let ingestInProgress = false;
 
@@ -85,8 +136,10 @@ ingestRoute.post("/admin/ingest", async (req, res) => {
         console.log(`[ingest] cleared ${count} categor${count === 1 ? "y" : "ies"} for reclassification`);
       }
     })
-    .then(() => runIngest())
-    .then((summaries) => console.log("[ingest] finished:", JSON.stringify(summaries)))
+    // Booked as a SyncRun like a scheduled run, so a manual sync counts
+    // toward "when did we last sync" and the scheduler doesn't fire again
+    // right on top of one someone just triggered by hand.
+    .then(() => runSync("manual"))
     .catch((err) => console.error("[/api/admin/ingest] failed:", err))
     .finally(() => {
       ingestInProgress = false;

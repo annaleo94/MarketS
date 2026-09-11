@@ -87,10 +87,21 @@ function extractProducts(html: string): CatalogProduct[] {
     const price = Number(priceMatch[1]);
     if (!Number.isFinite(price) || price <= 0) continue;
 
+    // The theme renders the pre-discount price into the card's own price
+    // box ("מחיר מלא"), hidden until the discount applies. It's read out
+    // of the matched card block rather than from a page-wide lookup: the
+    // GTM payload's `id` is a different identifier from the Magento
+    // entity id the price box is keyed by (verified live -- zero overlap
+    // between the two sets), so position within the card is the only
+    // reliable join. 12 of 48 cards on page 1 carry one.
+    const listMatch = match[0].match(/id="old-price-\d+"\s+data-price-amount="([\d.]+)"/);
+    const listPrice = listMatch ? Number(listMatch[1]) : NaN;
+
     results.push({
       externalId: idMatch[1],
       title: decodeHtmlEntities(titleRaw).trim(),
       price,
+      ...(Number.isFinite(listPrice) && listPrice > price ? { listPrice } : {}),
       currency: "ILS",
       url: href,
       imageUrl,

@@ -42,6 +42,19 @@ export const env = {
   // and let successive runs finish the backlog.
   ingestMaxVisionCalls: Number(process.env.INGEST_MAX_VISION_CALLS ?? 600),
 
+  // How often the catalog re-syncs itself, in hours. 0 disables the
+  // scheduler entirely (useful locally, where crawling four real stores
+  // on a timer isn't wanted).
+  //
+  // Six hours is measured, not guessed: comparing every stored price
+  // against a fresh crawl of all four stores three hours apart found
+  // zero price changes and zero stock changes across 3,529 products, so
+  // intraday churn is low and hourly syncing would be pure waste. Four
+  // runs a day still catches an overnight promo rollover the same
+  // morning. SyncRun now records how much each run actually found, so
+  // this number can be re-derived from our own data rather than re-argued.
+  syncIntervalHours: Number(process.env.SYNC_INTERVAL_HOURS ?? 6),
+
   // Relevance floor applied after ranking. Deliberately configurable:
   // it gets tuned against real results, and there is no minimum quota --
   // if three products clear it, three are shown.

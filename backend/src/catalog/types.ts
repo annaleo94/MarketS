@@ -3,6 +3,11 @@ export interface CatalogProduct {
   externalId: string; // the store's own product id/handle -- used to dedupe on re-ingest
   title: string;
   price: number;
+  // The store's own "before" price, where it publishes one (Shopify's
+  // compare_at_price, Magento's oldPrice). Only meaningful when it's
+  // above `price`; catalog/history.ts is what decides that, so adapters
+  // can pass whatever the store gave them through untouched.
+  listPrice?: number;
   currency?: string; // defaults to ILS
   url: string;
   imageUrl?: string;

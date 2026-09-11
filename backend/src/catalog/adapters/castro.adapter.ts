@@ -59,7 +59,7 @@ interface SwatchAttribute {
 interface SwatchJsonConfig {
   productId?: string;
   attributes?: Record<string, SwatchAttribute>;
-  optionPrices?: Record<string, { finalPrice?: { amount?: number } }>;
+  optionPrices?: Record<string, { finalPrice?: { amount?: number }; oldPrice?: { amount?: number } }>;
 }
 
 export const castroAdapter: CatalogAdapter = {
@@ -135,8 +135,8 @@ function extractProducts(html: string, category: string | undefined, storeGender
     const config = configs.get(id);
     if (!data.name || !data.url || !config) continue;
 
-    const price = minFinalPrice(config);
-    if (!price || price <= 0) continue;
+    const pricing = minFinalPrice(config);
+    if (!pricing) continue;
 
     const sizeAttr = Object.values(config.attributes ?? {}).find((a) => a.code === "size");
     const inStockSizes = (sizeAttr?.options ?? []).filter((o) => (o.products?.stock?.length ?? 0) > 0);
@@ -144,7 +144,8 @@ function extractProducts(html: string, category: string | undefined, storeGender
     results.push({
       externalId: id,
       title: data.name,
-      price,
+      price: pricing.price,
+      ...(pricing.listPrice !== undefined ? { listPrice: pricing.listPrice } : {}),
       currency: "ILS",
       url: data.url,
       imageUrl: data.image,
@@ -191,9 +192,26 @@ function extractSwatchConfigs(html: string): Map<string, SwatchJsonConfig> {
   return configs;
 }
 
-function minFinalPrice(config: SwatchJsonConfig): number | null {
-  const amounts = Object.values(config.optionPrices ?? {})
-    .map((p) => p.finalPrice?.amount)
-    .filter((n): n is number => typeof n === "number" && n > 0);
-  return amounts.length > 0 ? Math.min(...amounts) : null;
+// The cheapest variant's price, plus the "before" price Magento carries
+// alongside it. `oldPrice` is the pre-discount price: on full-price items
+// it simply equals finalPrice (verified across a whole category page --
+// 234 variants, not one of them differing), and on a sale page it is the
+// real shelf price (69.90 against a 33.33 final). The list price is taken
+// from the same variant whose price is being quoted, not the maximum
+// across variants, so a cheap size never gets advertised as a discount
+// off an expensive one.
+function minFinalPrice(config: SwatchJsonConfig): { price: number; listPrice?: number } | null {
+  const priced = Object.values(config.optionPrices ?? {}).filter(
+    (p) => typeof p.finalPrice?.amount === "number" && p.finalPrice.amount > 0
+  );
+  if (priced.length === 0) return null;
+
+  const cheapest = priced.reduce((a, b) => (b.finalPrice!.amount! < a.finalPrice!.amount! ? b : a));
+  const price = cheapest.finalPrice!.amount!;
+  const listPrice = cheapest.oldPrice?.amount;
+
+  return {
+    price,
+    ...(typeof listPrice === "number" && listPrice > price ? { listPrice } : {}),
+  };
 }

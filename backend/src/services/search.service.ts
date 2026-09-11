@@ -135,6 +135,11 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
       // Unisex always passes a gendered request -- it fits either child.
       ...(parsed.gender && parsed.gender !== "unisex" ? { gender: { in: [parsed.gender, "unisex"] } } : {}),
       inStock: true,
+      // Products that left a store's feed are kept (their price history
+      // is the point) but marked delisted. Delisting also clears inStock,
+      // so this is belt-and-braces -- a stored row that is no longer for
+      // sale must never reach a shopper, whatever else goes wrong.
+      delistedAt: null,
     },
   });
 

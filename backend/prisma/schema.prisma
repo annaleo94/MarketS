@@ -88,11 +88,90 @@ model Product {
   legStyle       String?
   legStyleSource String? // "title" | "vision" | "none" (looked, couldn't tell)
   legStyleConfidence Float? // 0..1, set only when legStyleSource is "vision"
+
+  // --- price & availability history ---------------------------------
+  // Maintained on every sync so a card can say "ירד מ-₪99" without
+  // reading the event log; ProductEvent below keeps the full timeline.
+  //
+  // The store's own "before" price where it publishes one (Shopify's
+  // compare_at_price, Magento's oldPrice). Null means the store doesn't
+  // say -- which is NOT the same as "not on sale", so a price drop we
+  // observed ourselves is tracked separately in previousPrice.
+  listPrice      Float?
+  previousPrice  Float?    // the last price we saw that differed from the current one
+  priceChangedAt DateTime? // when the current price first appeared
+  lowestPrice    Float?    // cheapest we have ever seen it
+  highestPrice   Float?    // dearest we have ever seen it
+  // A product that vanishes from a store's feed is kept, not deleted --
+  // otherwise "חזר למלאי" could never be detected, since the row holding
+  // its history would already be gone. Search filters on inStock, so a
+  // delisted row stops showing up without losing what we know about it.
+  firstSeenAt    DateTime  @default(now())
+  lastSeenAt     DateTime  @default(now()) // last sync that found it in the feed
+  delistedAt     DateTime? // set when it left the feed, cleared when it returns
+  // How many syncs in a row have not seen this product. Castro's crawl is
+  // measurably non-deterministic -- two runs three hours apart returned
+  // 1,014 and 973 products, a 4% swing with no real inventory change
+  // behind it -- so a single miss means nothing. Only a product missing
+  // MISSED_SYNCS_BEFORE_DELIST times running is treated as actually gone.
+  missedSyncs    Int       @default(0)
+
+  events     ProductEvent[]
   updatedAt  DateTime @updatedAt
   createdAt  DateTime @default(now())
 
   @@unique([storeId, externalId])
   @@index([storeId])
+}
+
+// The timeline behind Product's price/availability summary fields: one
+// row per observed change, never per sync. A sync that finds nothing
+// changed writes nothing here, so this grows with real retail activity
+// rather than with how often the job happens to run.
+model ProductEvent {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // "listed"        -- first time we ever saw it
+  // "price-drop"    -- price went down
+  // "price-rise"    -- price went up
+  // "sale-start"    -- the store began publishing a higher "before" price
+  // "sale-end"      -- that "before" price went away
+  // "out-of-stock"  -- every size sold out (still listed)
+  // "back-in-stock" -- stock returned after being out
+  // "delisted"      -- disappeared from the store's feed entirely
+  // "relisted"      -- came back after being delisted
+  kind       String
+  oldPrice   Float?
+  newPrice   Float?
+  listPrice  Float?   // the store's own "before" price at the time, if any
+  observedAt DateTime @default(now())
+
+  @@index([productId, observedAt])
+  @@index([kind, observedAt])
+}
+
+// One row per sync run -- what ran, when, how long it took, and what
+// changed. Kept so "is the sync actually running, and is it healthy?"
+// is answerable from data rather than by reading container logs, and so
+// the scheduler can tell from the DB (not from in-process state, which a
+// restart loses) when the last run finished.
+model SyncRun {
+  id         String    @id @default(cuid())
+  trigger    String // "schedule" | "manual"
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  storesJson String? // per-store fetched/delisted/changed counts
+  newProducts Int      @default(0)
+  priceDrops  Int      @default(0)
+  priceRises  Int      @default(0)
+  backInStock Int      @default(0)
+  outOfStock  Int      @default(0)
+  delisted    Int      @default(0)
+  relisted    Int      @default(0)
+  error      String?
+
+  @@index([startedAt])
 }
 
 // One row per distinct free-text search we've already resolved, so
