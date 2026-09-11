@@ -23,8 +23,18 @@ export const env = {
   },
 
   // Safety cap on catalog ingestion, so a misbehaving store (or a config
-  // mistake) can't make `npm run ingest` crawl forever.
-  ingestMaxPagesPerSource: Number(process.env.INGEST_MAX_PAGES_PER_SOURCE ?? 2),
+  // mistake) can't make `npm run ingest` crawl forever. Not a target to
+  // tune down to "what we currently need": the previous value of 2 was
+  // silently dropping most of the catalogue on the two largest stores --
+  // Shilav's single collection is 6 pages deep (1,424 products; only 500
+  // were ever ingested), Fox's two are 4 pages each (1,766 real vs 1,000
+  // ingested) -- discovered only because a shopper searched for a product
+  // that happened to live entirely past page 2. Each crawl loop still
+  // stops itself the moment a page comes back empty, so this only bounds
+  // the pathological case (a source that never terminates); it should
+  // stay comfortably above any real catalogue this pilot's stores are
+  // likely to reach, not just today's.
+  ingestMaxPagesPerSource: Number(process.env.INGEST_MAX_PAGES_PER_SOURCE ?? 40),
 
   // Products whose colour isn't stated in the title get it read off their
   // photo (see catalog/enrich-colors.ts). Each product is resolved once,

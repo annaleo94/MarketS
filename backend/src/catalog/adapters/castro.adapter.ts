@@ -71,7 +71,8 @@ export const castroAdapter: CatalogAdapter = {
     const byId = new Map<string, CatalogProduct>();
 
     for (const { path, category, storeGender } of CATEGORY_PATHS) {
-      for (let page = 1; page <= env.ingestMaxPagesPerSource; page++) {
+      let page = 1;
+      for (; page <= env.ingestMaxPagesPerSource; page++) {
         const url = `${BASE_URL}/${path}${page > 1 ? `?p=${page}` : ""}`;
         const html = await fetchText(url);
         if (!html) break;
@@ -81,6 +82,14 @@ export const castroAdapter: CatalogAdapter = {
 
         for (const product of products) {
           if (!byId.has(product.externalId)) byId.set(product.externalId, product);
+        }
+
+        // See shopify.factory.ts's identical check: a non-empty page right
+        // at the cap means there may be more catalogue this run never saw.
+        if (page === env.ingestMaxPagesPerSource) {
+          console.warn(
+            `[catalog] castro/${path}: hit the ${env.ingestMaxPagesPerSource}-page ingest cap with a full page still coming back -- this category may have more products than were fetched`
+          );
         }
       }
     }

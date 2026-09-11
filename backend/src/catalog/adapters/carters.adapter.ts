@@ -25,7 +25,8 @@ export const cartersAdapter: CatalogAdapter = {
   async fetchCatalog(): Promise<CatalogProduct[]> {
     const byId = new Map<string, CatalogProduct>();
 
-    for (let page = 1; page <= env.ingestMaxPagesPerSource; page++) {
+    let page = 1;
+    for (; page <= env.ingestMaxPagesPerSource; page++) {
       const url = `${BASE_URL}${CATEGORY_PATH}${page > 1 ? `?p=${page}` : ""}`;
       const html = await fetchText(url);
       if (!html) break;
@@ -35,6 +36,14 @@ export const cartersAdapter: CatalogAdapter = {
 
       for (const product of found) {
         if (!byId.has(product.externalId)) byId.set(product.externalId, product);
+      }
+
+      // See shopify.factory.ts's identical check: a non-empty page right
+      // at the cap means there may be more catalogue this run never saw.
+      if (page === env.ingestMaxPagesPerSource) {
+        console.warn(
+          `[catalog] carters: hit the ${env.ingestMaxPagesPerSource}-page ingest cap with a full page still coming back -- this category may have more products than were fetched`
+        );
       }
     }
 

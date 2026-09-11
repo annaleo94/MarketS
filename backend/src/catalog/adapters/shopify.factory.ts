@@ -57,7 +57,8 @@ export function createShopifyAdapter(config: ShopifyStoreConfig): CatalogAdapter
       const byId = new Map<number, CatalogProduct>();
 
       for (const handle of config.collectionHandles) {
-        for (let page = 1; page <= env.ingestMaxPagesPerSource; page++) {
+        let page = 1;
+        for (; page <= env.ingestMaxPagesPerSource; page++) {
           const url = `${config.baseUrl}/collections/${handle}/products.json?limit=250&page=${page}`;
           const data = await fetchJson<ShopifyProductsResponse>(url);
           const products = data?.products ?? [];
@@ -67,6 +68,16 @@ export function createShopifyAdapter(config: ShopifyStoreConfig): CatalogAdapter
             if (byId.has(p.id)) continue;
             const listing = toCatalogProduct(p, config);
             if (listing) byId.set(p.id, listing);
+          }
+
+          // A full page right as the cap is reached means there's more
+          // catalogue on the far side of it -- silent otherwise, and that
+          // silence is exactly what let Fox and Shilav sit at a fraction
+          // of their real size for a long time before anyone noticed.
+          if (page === env.ingestMaxPagesPerSource && products.length > 0) {
+            console.warn(
+              `[catalog] ${config.key}/${handle}: hit the ${env.ingestMaxPagesPerSource}-page ingest cap with a full page still coming back -- this collection may have more products than were fetched`
+            );
           }
         }
       }
