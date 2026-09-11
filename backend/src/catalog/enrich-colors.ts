@@ -1,6 +1,7 @@
 import { prisma } from "../db/prisma";
 import { completeJsonAboutImage } from "../llm/openrouter.client";
 import { colorFromTitle, normalizeColorName, CANONICAL_COLORS } from "./colors";
+import { updateIfStillThere } from "./classify";
 import { env } from "../env";
 
 const VISION_CONCURRENCY = 5;
@@ -25,11 +26,7 @@ export async function enrichColors(): Promise<{ fromTitle: number; fromVision: n
   for (const product of pending) {
     const stated = colorFromTitle(product.title);
     if (stated) {
-      await prisma.product.update({
-        where: { id: product.id },
-        data: { color: stated, colorSource: "title" },
-      });
-      fromTitle += 1;
+      if (await updateIfStillThere(product.id, { color: stated, colorSource: "title" })) fromTitle += 1;
     } else if (product.imageUrl) {
       needsVision.push(product);
     }
@@ -55,19 +52,16 @@ export async function enrichColors(): Promise<{ fromTitle: number; fromVision: n
         // and found no garment is recorded as settled.
         if (!result) continue;
         if (result.colors.length === 0) {
-          await prisma.product.update({ where: { id: slice[j].id }, data: { colorSource: "none" } });
+          await updateIfStillThere(slice[j].id, { colorSource: "none" });
           continue;
         }
-        await prisma.product.update({
-          where: { id: slice[j].id },
-          data: {
-            color: result.colors[0],
-            colors: result.colors.join(","),
-            colorSource: "vision",
-            colorIsSolid: result.isSolid,
-          },
+        const updated = await updateIfStillThere(slice[j].id, {
+          color: result.colors[0],
+          colors: result.colors.join(","),
+          colorSource: "vision",
+          colorIsSolid: result.isSolid,
         });
-        fromVision += 1;
+        if (updated) fromVision += 1;
       }
     }
   }

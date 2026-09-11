@@ -44,6 +44,25 @@ interface Classified {
 const BATCH_SIZE = 25;
 const CLASSIFY_MAX_TOKENS = 2500;
 
+// A product selected at the top of classifyCatalog() can be gone by the
+// time its own turn to be updated comes around -- deleted by a store's own
+// delete-missing pass earlier in the same ingest, or by a second ingest
+// overlapping this one during a deploy. Surfaced in production: one row
+// vanishing mid-batch aborted classification for the whole catalogue,
+// including everything already correctly resolved earlier in the loop.
+// Prisma's code for "the row this update targeted doesn't exist" is P2025;
+// that one specific case is swallowed so the batch keeps going, anything
+// else still throws.
+export async function updateIfStillThere(id: string, data: Record<string, unknown>): Promise<boolean> {
+  try {
+    await prisma.product.update({ where: { id }, data });
+    return true;
+  } catch (err) {
+    if ((err as { code?: string }).code === "P2025") return false;
+    throw err;
+  }
+}
+
 // Classifies whatever is still missing a category, in batches -- one call
 // per batch rather than per product, which keeps a 1,500-product
 // catalogue to a few dozen cheap text calls.
@@ -61,8 +80,7 @@ export async function classifyCatalog(): Promise<{ fromStore: number; fromLlm: n
     // fallback, since "חולצה ארוכה עם הדפס" names its own garment type.
     const slug = categoryFromStoreValue(product.category) ?? categoryFromText(product.title);
     if (slug) {
-      await prisma.product.update({ where: { id: product.id }, data: { categorySlug: slug } });
-      fromStore += 1;
+      if (await updateIfStillThere(product.id, { categorySlug: slug })) fromStore += 1;
     } else {
       needsLlm.push({ id: product.id, title: product.title });
     }
@@ -76,11 +94,8 @@ export async function classifyCatalog(): Promise<{ fromStore: number; fromLlm: n
 
       for (const item of classified) {
         if (!item.category || !isKnownCategory(item.category)) continue;
-        await prisma.product.update({
-          where: { id: item.id },
-          data: { categorySlug: item.category, ...(item.gender ? { gender: item.gender } : {}) },
-        });
-        fromLlm += 1;
+        const data = { categorySlug: item.category, ...(item.gender ? { gender: item.gender } : {}) };
+        if (await updateIfStillThere(item.id, data)) fromLlm += 1;
       }
     }
   }
