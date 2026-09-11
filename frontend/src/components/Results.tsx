@@ -75,9 +75,7 @@ export function Results({ data, onDropFilter }: Props) {
             ))}
         </ul>
       ) : (
-        data.stores.map((group) => (
-          <StoreGroup key={group.store.key} group={group} cheapestOverall={cheapestOverall} />
-        ))
+        data.stores.map((group) => <StoreGroup key={group.store.key} group={group} />)
       )}
     </div>
   );

@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { StoreResults } from "../api";
+import { StoreResults, matchRank } from "../api";
 import { ProductCard } from "./ProductCard";
 
 const INITIAL_VISIBLE = 6;
 
-export function StoreGroup({ group, cheapestOverall }: { group: StoreResults; cheapestOverall: number | null }) {
+export function StoreGroup({ group }: { group: StoreResults }) {
   const [expanded, setExpanded] = useState(false);
 
   // A store with nothing is still shown. Leaving it out would leave the
@@ -19,6 +19,15 @@ export function StoreGroup({ group, cheapestOverall }: { group: StoreResults; ch
     );
   }
 
+  // Each store gets its own "cheapest" badge, not just whichever single
+  // item is cheapest across all four stores combined -- a shopper
+  // comparing Fox against Shilav wants to see each one's best price, not
+  // just be told Shilav won and left wondering what Fox's own best was.
+  // Same "best tier actually present" rule as before, just scoped to this
+  // store's own items instead of the whole result set.
+  const bestRank = Math.min(...group.items.map(matchRank));
+  const cheapestInStore = Math.min(...group.items.filter((i) => matchRank(i) === bestRank).map((i) => i.price));
+
   const visible = expanded ? group.items : group.items.slice(0, INITIAL_VISIBLE);
 
   return (
@@ -29,7 +38,7 @@ export function StoreGroup({ group, cheapestOverall }: { group: StoreResults; ch
 
       <ul className="store-group__items">
         {visible.map((item) => (
-          <ProductCard key={item.id} item={item} isCheapest={item.price === cheapestOverall} />
+          <ProductCard key={item.id} item={item} isCheapest={item.price === cheapestInStore} />
         ))}
       </ul>
 
