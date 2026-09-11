@@ -60,12 +60,30 @@ export function categoryFromStoreValue(raw: string | null | undefined): string |
 // ("סט חולצה ומכנסיים") that trusting them over the store isn't safe yet.
 const TITLE_OVERRIDES_STORE_FAMILIES = new Set(["accessories", "outerwear", "bodysuit", "swimwear"]);
 
+// A second, narrower kind of override: not a family disagreement, but a
+// store bucket too coarse to have a slot for a real category at all. Audited
+// Fox's own `product_type` directly (its 17 distinct values across the full
+// catalogue) expecting it to be a clean per-product source -- and it mostly
+// is, every other value maps straight onto an existing alias -- except
+// leggings aren't one of its buckets: "טייץ בייסיק ארוך" (a legging) carries
+// the same "מכנסיים ארוכים" product_type as actual long pants, in bulk (of
+// Fox's "מכנסיים"/"מכנסיים קצרים"/"מכנסיים ארוכים" products, 38%/11%/46%
+// are titled טייץ). No store-value mapping fixes that: the store's own
+// scheme genuinely doesn't distinguish them. So when the title names
+// leggings specifically and the store only offers a generic bottoms bucket,
+// the title wins on specificity, not on disagreement.
+const LEGGINGS_SLUGS = new Set(["leggings", "leggings-short", "leggings-long"]);
+const GENERIC_BOTTOMS_SLUGS = new Set(["bottoms", "shorts", "pants"]);
+
 export function resolveCategory(storeValue: string | null | undefined, title: string): string | null {
   const fromStore = categoryFromStoreValue(storeValue);
   const fromTitle = categoryFromText(title);
   if (fromTitle) {
     const titleFamily = categoryFamily(fromTitle);
     if (TITLE_OVERRIDES_STORE_FAMILIES.has(titleFamily) && categoryFamily(fromStore ?? "") !== titleFamily) {
+      return fromTitle;
+    }
+    if (LEGGINGS_SLUGS.has(fromTitle) && fromStore && GENERIC_BOTTOMS_SLUGS.has(fromStore)) {
       return fromTitle;
     }
   }
