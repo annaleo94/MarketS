@@ -32,6 +32,17 @@ ingestRoute.post("/admin/ingest", async (req, res) => {
   // its own title are left alone.
   const recolor = req.query.recolor === "1";
 
+  // ?reclassify=1 does the same for category: classifyCatalog() only ever
+  // looks at products with categorySlug still null, so a belt that was
+  // already (wrongly) tagged "bottoms" before a taxonomy fix stays wrong
+  // forever otherwise -- it's never null again to be picked back up.
+  // Unlike colour, category has no per-product record of which method set
+  // it, so this clears every product's category rather than a specific
+  // subset; re-deriving it is free for the large majority that resolve
+  // from store data or title text, and only the leftover minority costs an
+  // LLM call, same as any other ingest.
+  const reclassify = req.query.reclassify === "1";
+
   ingestInProgress = true;
   Promise.resolve()
     .then(async () => {
@@ -43,6 +54,13 @@ ingestRoute.post("/admin/ingest", async (req, res) => {
           data: { color: null, colors: null, colorSource: null, colorIsSolid: null },
         });
         console.log(`[ingest] cleared ${count} photo-derived colour(s) for re-detection`);
+      }
+      if (reclassify) {
+        const { count } = await prisma.product.updateMany({
+          where: { categorySlug: { not: null } },
+          data: { categorySlug: null },
+        });
+        console.log(`[ingest] cleared ${count} categor${count === 1 ? "y" : "ies"} for reclassification`);
       }
     })
     .then(() => runIngest())
