@@ -135,7 +135,7 @@ export async function parseQuery(raw: string): Promise<ParsedQuery> {
 // Matched as whole tokens, not a substring regex: Hebrew letters aren't
 // \w in JS, so \b silently fails to bound them (confirmed: /\bלבן\b/ does
 // not match "חולצה לבן" at all) and would have made this backstop inert.
-function suppressAmbiguousWhiteForGirls(raw: string, gender: Gender | null, color: string | null): string | null {
+export function suppressAmbiguousWhiteForGirls(raw: string, gender: Gender | null, color: string | null): string | null {
   if (gender !== "girls" || color !== "לבן") return color;
   const tokens = tokenize(raw);
   return tokens.includes("לבנה") || tokens.includes("לבן") ? color : null;

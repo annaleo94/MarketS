@@ -11,7 +11,8 @@
     "ingest": "tsx src/catalog/ingest.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:regression": "tsx src/catalog/regression-tests.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
