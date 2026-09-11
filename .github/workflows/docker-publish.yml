@@ -24,7 +24,13 @@ jobs:
       # live-verified bug found and fixed during development. A failure
       # here means this push would have reintroduced one of them, so the
       # image is never built or published.
+      #
+      # db:generate is required even though the suite never touches the
+      # database -- classify.ts imports db/prisma.ts at module load time
+      # for its other exports, and prisma.ts constructs a PrismaClient
+      # (lazily connected, but the generated client code has to exist).
       - run: npm ci
+      - run: npm run db:generate --workspace backend
       - run: npm run test:regression --workspace backend
 
       - uses: docker/setup-buildx-action@v3
