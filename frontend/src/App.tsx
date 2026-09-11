@@ -36,34 +36,39 @@ export default function App() {
   }
 
   return (
-    <div className="page">
-      <header className="header">
-        <h1>MarketS</h1>
-        <p className="tagline">פיילוט: בגדי תינוקות וילדים — פוקס, שילב, קרטרס וקסטרו קידס</p>
-        <p className="subtagline">
-          תארו את הפריט במילים שלכם — "בגד ים מידה שנתיים", "חולצה לבנה לחג לבנות מידה 2"
-        </p>
+    <>
+      <header className="hero">
+        <div className="hero__blob hero__blob--1" />
+        <div className="hero__blob hero__blob--2" />
+        <div className="hero__blob hero__blob--3" />
+        <div className="hero__inner">
+          <h1>MarketS</h1>
+          <p className="tagline">גדלים מהר, קונים חכם</p>
+          <p className="subtagline">משווים מחירים בפוקס, שילב, קרטרס וקסטרו קידס — במקום אחד</p>
+        </div>
       </header>
 
-      <SearchBar onSearch={handleSearch} loading={loading} />
+      <div className="page">
+        <SearchBar onSearch={handleSearch} loading={loading} />
 
-      <main>
-        {error && <div className="error-state">שגיאה: {error}</div>}
-        {!error && loading && <div className="loading-state">מחפש בכל החנויות...</div>}
-        {!error && !loading && data && <Results data={data} onDropFilter={handleDropFilter} />}
-        {!error && !loading && !data && (
-          <div className="intro">
-            <p>תארו למעלה את הפריט שאתם מחפשים כדי להתחיל.</p>
-          </div>
-        )}
-      </main>
+        <main>
+          {error && <div className="error-state">שגיאה: {error}</div>}
+          {!error && loading && <div className="loading-state">מחפש בכל החנויות...</div>}
+          {!error && !loading && data && <Results data={data} onDropFilter={handleDropFilter} />}
+          {!error && !loading && !data && (
+            <div className="intro">
+              <p>תארו למעלה את הפריט שאתם מחפשים כדי להתחיל — למשל "בגד ים מידה שנתיים".</p>
+            </div>
+          )}
+        </main>
 
-      <footer className="footer">
-        <p>
-          כל הנתונים אמיתיים ונטענים ישירות מאתרי החנויות. קטגוריה, מידה ומגדר הם סינון קשיח — פריט
-          שלא עומד בהם לא יוצג כלל.
-        </p>
-      </footer>
-    </div>
+        <footer className="footer">
+          <p>
+            כל הנתונים אמיתיים ונטענים ישירות מאתרי החנויות. קטגוריה, מידה ומגדר הם סינון קשיח — פריט
+            שלא עומד בהם לא יוצג כלל.
+          </p>
+        </footer>
+      </div>
+    </>
   );
 }

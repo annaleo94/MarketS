@@ -1,8 +1,11 @@
 import { SearchResultItem } from "../api";
 
 const currencySymbol: Record<string, string> = { ILS: "₪", USD: "$", EUR: "€" };
-const legStyleLabels: Record<string, string> = { footed: "עם רגליות", footless: "בלי רגליות" };
 
+// Kept deliberately sparse: title, the sizes actually in stock, and the
+// price -- everything else the server knows about an item (colour, leg
+// style, store gender...) drives matching and sort order but isn't text
+// the shopper needs to read on every single card.
 export function ProductCard({ item, isCheapest }: { item: SearchResultItem; isCheapest: boolean }) {
   const symbol = currencySymbol[item.currency] ?? item.currency;
 
@@ -16,15 +19,7 @@ export function ProductCard({ item, isCheapest }: { item: SearchResultItem; isCh
 
       <div className="product__body">
         <div className="product__title">{item.title}</div>
-        {item.sizes && <div className="product__meta">מידות: {item.sizes.split(",").join(" · ")}</div>}
-        {(item.colors?.length ?? 0) > 1 ? (
-          <div className="product__meta">צבעים במארז: {item.colors!.join(" · ")}</div>
-        ) : (
-          item.color && <div className="product__meta">צבע: {item.color}</div>
-        )}
-        {item.legStyle && (
-          <div className="product__meta">{legStyleLabels[item.legStyle] ?? item.legStyle}</div>
-        )}
+        {item.sizes && <div className="product__meta">{item.sizes.split(",").join(" · ")}</div>}
       </div>
 
       <div className="product__buy">
@@ -37,7 +32,7 @@ export function ProductCard({ item, isCheapest }: { item: SearchResultItem; isCh
           {item.price.toLocaleString("he-IL")}
         </div>
         <a className="product__link" href={item.url} target="_blank" rel="noopener noreferrer">
-          לצפייה בחנות ←
+          לחנות ←
         </a>
       </div>
     </li>
