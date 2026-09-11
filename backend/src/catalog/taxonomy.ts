@@ -23,10 +23,22 @@ export const CATEGORIES: CategoryNode[] = [
 
   // --- tops ---
   { slug: "tops", label: "חולצות", aliases: ["חולצה", "חולצות", "טישרט", "top"] },
-  { slug: "shirt-short", label: "חולצה קצרה", parent: "tops", aliases: ["חולצה קצרה", "טישרט", "שרוול קצר"] },
-  { slug: "shirt-long", label: "חולצה ארוכה", parent: "tops", aliases: ["חולצה ארוכה", "שרוול ארוך"] },
+  // "שרוול קצר"/"שרוול ארוך" (short-/long-sleeved) used to be aliases here
+  // too, but a sleeve length describes ANY garment, not specifically a
+  // shirt: of every title in the catalogue that names a sleeve length
+  // without also naming a shirt, 9 of 10 were actually bodysuits, a dress
+  // or swimwear -- "בגד גוף ריב עם שרוול קצר" is a short-sleeved bodysuit,
+  // not a shirt, and used to be filed as one.
+  { slug: "shirt-short", label: "חולצה קצרה", parent: "tops", aliases: ["חולצה קצרה", "טישרט"] },
+  { slug: "shirt-long", label: "חולצה ארוכה", parent: "tops", aliases: ["חולצה ארוכה"] },
   { slug: "tank", label: "גופייה", parent: "tops", aliases: ["גופיה", "גופייה", "מיקרו"] },
-  { slug: "bodysuit", label: "בגד גוף", parent: "tops", aliases: ["בגד גוף", "בגדי גוף", "אוברול קצר"] },
+
+  // A bodysuit is its own top-level category, not a child of tops: it used
+  // to be nested there, which meant a plain "חולצה" search silently pulled
+  // in every bodysuit too (tops's own descendant list included it) and a
+  // shopper couldn't search for one without the other. As a sibling, each
+  // stays exactly what it says.
+  { slug: "bodysuit", label: "בגד גוף", aliases: ["בגד גוף", "בגדי גוף", "אוברול קצר"] },
 
   // --- bottoms ---
   { slug: "bottoms", label: "מכנסיים וחצאיות", aliases: ["מכנס", "מכנסיים", "תחתון"] },
@@ -51,7 +63,33 @@ export const CATEGORIES: CategoryNode[] = [
 
   // --- extras ---
   { slug: "shoes", label: "הנעלה", aliases: ["נעל", "נעלי", "סנדל", "מגף", "כפכף"] },
-  { slug: "accessories", label: "אביזרים", aliases: ["גרב", "גרביים", "כובע", "צעיף", "כפפות", "חיתול בד", "סינר", "חגורה", "חגורות"] },
+
+  // Same shape as swimwear and bottoms above: one parent so a generic
+  // "אביזרים" still finds all of these, and one child per kind so each is
+  // its own filterable category instead of one bucket a search for socks
+  // or hats couldn't tell apart. This used to be a single flat node with
+  // every alias below on it directly -- searching for a hat surfaced
+  // socks, belts, gloves and everything else in the drawer alongside it.
+  { slug: "accessories", label: "אביזרים", aliases: ["אביזר", "אביזרים"] },
+  { slug: "socks", label: "גרביים", parent: "accessories", aliases: ["גרביים", "גרב"] },
+  {
+    slug: "tights",
+    label: "גרביונים",
+    parent: "accessories",
+    aliases: ["גרביון", "גרביונים"],
+  },
+  { slug: "hats", label: "כובעים", parent: "accessories", aliases: ["כובע", "כובעים"] },
+  { slug: "belts", label: "חגורות", parent: "accessories", aliases: ["חגורה", "חגורות"] },
+  {
+    slug: "hair-accessories",
+    label: "אביזרי שיער",
+    parent: "accessories",
+    aliases: ["גומייה", "גומיות", "גומיית שיער", "גומיות שיער", "סיכת שיער", "סיכות שיער", "קליפס", "אביזרי שיער"],
+  },
+  { slug: "scarves", label: "צעיפים", parent: "accessories", aliases: ["צעיף", "צעיפים"] },
+  { slug: "gloves", label: "כפפות", parent: "accessories", aliases: ["כפפה", "כפפות"] },
+  { slug: "bibs", label: "סינרים", parent: "accessories", aliases: ["סינר", "סינרים"] },
+  { slug: "cloth-diapers", label: "חיתולי בד", parent: "accessories", aliases: ["חיתול בד", "חיתולי בד"] },
 ];
 
 const BY_SLUG = new Map(CATEGORIES.map((c) => [c.slug, c]));

@@ -64,6 +64,8 @@ export async function parseQuery(raw: string): Promise<ParsedQuery> {
         `category: בדיוק אחד מהערכים הבאים או null: ${CATEGORIES.map((c) => c.slug).join(", ")}. ` +
         "בחר את רמת ההיררכיה שהלקוח ביקש, לא יותר ספציפית ממנה: מילה כללית מקבלת את קטגוריית האב. " +
         "'בגד ים' -> swimwear (ולא swimsuit), 'חולצה' -> tops (ולא shirt-short), 'מכנסיים' -> bottoms. " +
+        "'בגד גוף' הוא bodysuit -- קטגוריה נפרדת מ-tops, לא צאצא שלה: בגד גוף אינו סוג של חולצה. " +
+        "'אביזרים'/'אקססוריז' כללי -> accessories; ספציפי ('גרביים','כובע','חגורה','גומייה לשיער','גרביון') -> הצאצא המתאים (socks/hats/belts/hair-accessories/tights). " +
         "רק אם הלקוח היה ספציפי בעצמו בחר צאצא: 'ביקיני' -> bikini, 'חולצה ארוכה' -> shirt-long. " +
         'gender: "girls"/"boys"/"unisex" רק אם הלקוח ציין במפורש, אחרת null. ' +
         'שים לב: "לבנה"/"לבנות" הם בדרך כלל הצבע לבן ולא מגדר. ' +
