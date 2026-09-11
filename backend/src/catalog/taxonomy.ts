@@ -56,7 +56,25 @@ export const CATEGORIES: CategoryNode[] = [
   // are aliases here; a jean jacket still matches "ג'קט" (outerwear), a
   // denim skirt "חצאית" (skirt), each via its own node.
   { slug: "pants", label: "מכנסיים ארוכים", parent: "bottoms", aliases: ["מכנסיים ארוכים", "מכנס ארוך", "מכנסי ג'ינס", "מכנס ג'ינס", "מכנסי גינס", "מכנס גינס"] },
+  // Parent stays generic (catches "טייץ ריב", "רגליות" and any length the
+  // title doesn't state), with short/long as real children the same way
+  // shorts/pants already split bottoms -- the live catalogue has both
+  // ("מארז טייצים קצרים", "מארז 3 טייצים ארוכים") as distinct listings, not
+  // just a size difference. Being a bottoms descendant, leggings surface in
+  // a plain "מכנסיים" search too, at whatever specificity was asked for.
   { slug: "leggings", label: "טייצים", parent: "bottoms", aliases: ["טייץ", "טייצים", "רגליות"] },
+  {
+    slug: "leggings-short",
+    label: "טייצים קצרים",
+    parent: "leggings",
+    aliases: ["טייץ קצר", "טייצים קצרים", "רגליות קצרות"],
+  },
+  {
+    slug: "leggings-long",
+    label: "טייצים ארוכים",
+    parent: "leggings",
+    aliases: ["טייץ ארוך", "טייצים ארוכים", "רגליות ארוכות"],
+  },
   { slug: "skirt", label: "חצאיות", parent: "bottoms", aliases: ["חצאית", "חצאיות"] },
 
   // --- whole-body ---

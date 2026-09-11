@@ -41,21 +41,33 @@ export function categoryFromStoreValue(raw: string | null | undefined): string |
 // בנים" showing up for "מכנסיים"). The hint is really describing the page,
 // not necessarily the product.
 //
-// So when the title names an ACCESSORY the store hint doesn't agree is one
-// -- a belt, a hat, a hair tie -- the title wins: a specific accessory word
-// is a very deliberate, unambiguous choice for a title to make, and stores
-// routinely cross-merchandise accessories onto a clothing page's listing
-// (exactly what happened here) but essentially never do the reverse. The
-// override stops there rather than at "any family mismatch" -- checked
-// against the live catalogue, a broader "title always wins" rule flips
-// titles like "חולצת גלישה" (a rash-guard swim shirt, correctly filed as
-// swimwear by the store) to "tops" purely because "חולצת" also appears in
-// it, which is a regression, not a fix.
+// So when the title names something from one of these families the store
+// hint doesn't agree with, the title wins: each is named by specific,
+// deliberate, hard-to-confuse words ("חגורה", "וסט", "קרדיגן", "בגד גוף",
+// "בגד ים שלם"), and stores routinely cross-merchandise them onto some
+// other page's listing (belts on the pants page, cardigans on the shirts
+// page) but essentially never mislabel the reverse. Confirmed live for
+// each: Castro's "חולצות" pages leak "וסט"/"קרדיגן" items into "חולצה"
+// searches the same way its "מכנסיים" pages leaked belts, and some Fox
+// swimsuits carry a "בגד גוף" store hint despite being swimwear.
+//
+// This stops well short of "any family mismatch" -- checked against the
+// live catalogue, that broader rule looked appealing but flips titles like
+// "חולצת גלישה" (a rash-guard swim shirt, correctly filed as swimwear by
+// the store) to "tops" purely because "חולצת" also appears in it, which is
+// a regression, not a fix. "tops"/"bottoms" specifically stay out of this
+// list: both are common enough as an incidental word in a multi-item title
+// ("סט חולצה ומכנסיים") that trusting them over the store isn't safe yet.
+const TITLE_OVERRIDES_STORE_FAMILIES = new Set(["accessories", "outerwear", "bodysuit", "swimwear"]);
+
 export function resolveCategory(storeValue: string | null | undefined, title: string): string | null {
   const fromStore = categoryFromStoreValue(storeValue);
   const fromTitle = categoryFromText(title);
-  if (fromTitle && categoryFamily(fromTitle) === "accessories" && categoryFamily(fromStore ?? "") !== "accessories") {
-    return fromTitle;
+  if (fromTitle) {
+    const titleFamily = categoryFamily(fromTitle);
+    if (TITLE_OVERRIDES_STORE_FAMILIES.has(titleFamily) && categoryFamily(fromStore ?? "") !== titleFamily) {
+      return fromTitle;
+    }
   }
   return fromStore ?? fromTitle;
 }
