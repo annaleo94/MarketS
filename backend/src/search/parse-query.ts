@@ -2,6 +2,7 @@ import { completeJson } from "../llm/openrouter.client";
 import { CATEGORIES, categoryFromText, isKnownCategory, legStyleFromText } from "../catalog/taxonomy";
 import { parseRequestedSize, MonthRange } from "../catalog/sizes";
 import { colorFromTitle } from "../catalog/colors";
+import { tokenize } from "../scrapers/normalize";
 import { env } from "../env";
 import { Gender } from "../catalog/classify";
 
@@ -71,7 +72,9 @@ export async function parseQuery(raw: string): Promise<ParsedQuery> {
         "'אביזרים'/'אקססוריז' כללי -> accessories; ספציפי ('גרביים','כובע','חגורה','גומייה לשיער','גרביון') -> הצאצא המתאים (socks/hats/belts/hair-accessories/tights). " +
         "רק אם הלקוח היה ספציפי בעצמו בחר צאצא: 'ביקיני' -> bikini, 'חולצה ארוכה' -> shirt-long. " +
         'gender: "girls"/"boys"/"unisex" רק אם הלקוח ציין במפורש, אחרת null. ' +
-        'שים לב: "לבנה"/"לבנות" הם בדרך כלל הצבע לבן ולא מגדר. ' +
+        'שים לב: "לבנה"/"לבנות" עשוי להיות גם הצבע לבן וגם "מגדר" (לבנות=לילדות/בנות) -- ' +
+        'אם ההקשר מתאים יותר למגדר (למשל שם פריט שלא דורש התאמה דקדוקית נקבה לצבע לבן, ' +
+        'כמו "מכנסיים לבנות"), בחר מגדר בלבד ואל תחזיר גם צבע לבן מאותה מילה. ' +
         "ageMonths: הגיל שהלקוח ביקש בחודשים (שנתיים=24, 3 חודשים=3), או null. " +
         "color: שם הצבע בעברית או null. style: אירוע/סגנון כמו 'חג', 'ספורט', או null. " +
         "legStyle: רלוונטי רק לאוברול/מכנסיים -- \"footed\" אם הלקוח ביקש שהבגד סגור מעל כפות הרגליים " +
@@ -90,17 +93,52 @@ export async function parseQuery(raw: string): Promise<ParsedQuery> {
     typeof response.ageMonths === "number"
       ? { min: response.ageMonths, max: response.ageMonths + 3 }
       : local.size;
+  const gender = normalizeGender(response.gender) ?? local.gender;
+
+  // Falling back to `local.color` whenever the LLM said null used to
+  // override its judgement even when it correctly decided there's no
+  // colour to report: the LLM successfully read "מכנסיים לבנות" as gender
+  // (girls), returned color: null on purpose, and this promptly overrode
+  // that with local.color's bare-keyword scan, which knows nothing about
+  // that context and matches "לבנות" as white regardless. `local.color`
+  // only makes sense as a fallback for a *failed* LLM call, which is
+  // already handled by the `!response` return above -- not for a field
+  // the LLM successfully decided was empty.
+  const color = suppressAmbiguousWhiteForGirls(
+    raw,
+    gender,
+    response.color ? colorFromTitle(response.color) ?? local.color : null
+  );
 
   return {
     categorySlug: category,
     size,
     sizeLabel: size ? local.sizeLabel ?? `${size.min} חודשים` : null,
-    gender: normalizeGender(response.gender) ?? local.gender,
-    color: response.color ? colorFromTitle(response.color) ?? local.color : local.color,
+    gender,
+    color,
     legStyle: normalizeLegStyle(response.legStyle) ?? local.legStyle,
     style: response.style ?? null,
     semanticQuery: response.semanticQuery?.trim() || raw,
   };
+}
+
+// Deterministic backstop for the same "לבנות" ambiguity the prompt above
+// already asks the model to resolve -- in case it doesn't. Once gender has
+// resolved to girls, "לבן" surviving alongside it is trusted only if the
+// query also names an unambiguous white form that isn't itself the
+// gender-bearing word -- "לבנה" ("חולצה לבנה לבנות" genuinely wants both) or
+// bare "לבן". ("לבנים" is excluded: it carries the exact same ambiguity for
+// boys -- "בנים" -- so it proves nothing here.) Otherwise the colour is
+// dropped rather than silently narrowing "pants for girls" down to "white
+// pants for girls" and reordering/hiding the rest of real stock.
+//
+// Matched as whole tokens, not a substring regex: Hebrew letters aren't
+// \w in JS, so \b silently fails to bound them (confirmed: /\bלבן\b/ does
+// not match "חולצה לבן" at all) and would have made this backstop inert.
+function suppressAmbiguousWhiteForGirls(raw: string, gender: Gender | null, color: string | null): string | null {
+  if (gender !== "girls" || color !== "לבן") return color;
+  const tokens = tokenize(raw);
+  return tokens.includes("לבנה") || tokens.includes("לבן") ? color : null;
 }
 
 function normalizeLegStyle(raw: string | null | undefined): "footed" | "footless" | null {
