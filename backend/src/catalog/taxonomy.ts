@@ -22,7 +22,14 @@ export const CATEGORIES: CategoryNode[] = [
   { slug: "swim-diaper", label: "חיתול ים", parent: "swimwear", aliases: ["חיתול ים", "חיתול שחייה"] },
 
   // --- tops ---
-  { slug: "tops", label: "חולצות", aliases: ["חולצה", "חולצות", "טישרט", "top"] },
+  // "חולצת" is the construct form ("shirt-of...") a title uses whenever it
+  // also names a fabric or style -- "חולצת טריקו", "חולצת פסים" -- which is
+  // most of them. Missing it meant categoryFromText had nothing to go on
+  // for the majority of shirt titles and this category relied entirely on
+  // each store's own hint being right; see resolveCategory in classify.ts
+  // for what happens when a store hint is wrong and there's no title match
+  // to fall back on.
+  { slug: "tops", label: "חולצות", aliases: ["חולצה", "חולצות", "חולצת", "טישרט", "top"] },
   // "שרוול קצר"/"שרוול ארוך" (short-/long-sleeved) used to be aliases here
   // too, but a sleeve length describes ANY garment, not specifically a
   // shirt: of every title in the catalogue that names a sleeve length
@@ -31,7 +38,7 @@ export const CATEGORIES: CategoryNode[] = [
   // not a shirt, and used to be filed as one.
   { slug: "shirt-short", label: "חולצה קצרה", parent: "tops", aliases: ["חולצה קצרה", "טישרט"] },
   { slug: "shirt-long", label: "חולצה ארוכה", parent: "tops", aliases: ["חולצה ארוכה"] },
-  { slug: "tank", label: "גופייה", parent: "tops", aliases: ["גופיה", "גופייה", "מיקרו"] },
+  { slug: "tank", label: "גופייה", parent: "tops", aliases: ["גופיה", "גופייה", "גופיית", "מיקרו"] },
 
   // A bodysuit is its own top-level category, not a child of tops: it used
   // to be nested there, which meant a plain "חולצה" search silently pulled
@@ -53,13 +60,16 @@ export const CATEGORIES: CategoryNode[] = [
   { slug: "skirt", label: "חצאיות", parent: "bottoms", aliases: ["חצאית", "חצאיות"] },
 
   // --- whole-body ---
-  { slug: "dress", label: "שמלות", aliases: ["שמלה", "שמלות"] },
+  // "שמלת" (construct, "dress-of...") is how a dress title reads whenever
+  // it also names an occasion or season -- "שמלת ערב", "שמלת קיץ" -- same
+  // gap as "חולצת" above.
+  { slug: "dress", label: "שמלות", aliases: ["שמלה", "שמלות", "שמלת"] },
   { slug: "overall", label: "אוברולים וסרבלים", aliases: ["אוברול", "אוברולים", "סרבל", "סרבלים", "חליפה"] },
   { slug: "set", label: "סטים ומארזים", aliases: ["סט", "סטים", "מארז", "מארזי", "חלקים"] },
 
   // --- outer / sleep ---
-  { slug: "outerwear", label: "מעילים וסריגים", aliases: ["מעיל", "פוטר", "קפוצון", "סריג", "קרדיגן", "ג'קט", "אפודה", "וסט"] },
-  { slug: "sleepwear", label: "ביגוד שינה", aliases: ["פיג'מה", "פיגמה", "ביגוד שינה", "שק שינה", "אוברול שינה"] },
+  { slug: "outerwear", label: "מעילים וסריגים", aliases: ["מעיל", "פוטר", "קפוצון", "סריג", "קרדיגן", "ג'קט", "אפודה", "אפודת", "וסט"] },
+  { slug: "sleepwear", label: "ביגוד שינה", aliases: ["פיג'מה", "פיגמה", "פיג'מת", "פיגמת", "ביגוד שינה", "שק שינה", "אוברול שינה"] },
 
   // --- extras ---
   { slug: "shoes", label: "הנעלה", aliases: ["נעל", "נעלי", "סנדל", "מגף", "כפכף"] },
@@ -79,15 +89,22 @@ export const CATEGORIES: CategoryNode[] = [
     aliases: ["גרביון", "גרביונים"],
   },
   { slug: "hats", label: "כובעים", parent: "accessories", aliases: ["כובע", "כובעים"] },
-  { slug: "belts", label: "חגורות", parent: "accessories", aliases: ["חגורה", "חגורות"] },
+  // "חגורת" (construct form, "belt-of...") is how a belt title almost
+  // always actually reads when it also names a material or style --
+  // "חגורת זמש" (suede belt), "חגורת עור" (leather belt) -- rather than
+  // the bare "חגורה" this used to rely on alone. Missing it meant those
+  // titles didn't match anything, so a wrong store-page hint (see
+  // resolveCategory in classify.ts) had nothing to lose to and won by
+  // default -- confirmed live: "חגורת זמש בנים" was filed under "bottoms".
+  { slug: "belts", label: "חגורות", parent: "accessories", aliases: ["חגורה", "חגורות", "חגורת"] },
   {
     slug: "hair-accessories",
     label: "אביזרי שיער",
     parent: "accessories",
-    aliases: ["גומייה", "גומיות", "גומיית שיער", "גומיות שיער", "סיכת שיער", "סיכות שיער", "קליפס", "אביזרי שיער"],
+    aliases: ["גומייה", "גומיות", "גומיית", "גומיית שיער", "גומיות שיער", "סיכת שיער", "סיכות שיער", "קליפס", "אביזרי שיער"],
   },
   { slug: "scarves", label: "צעיפים", parent: "accessories", aliases: ["צעיף", "צעיפים"] },
-  { slug: "gloves", label: "כפפות", parent: "accessories", aliases: ["כפפה", "כפפות"] },
+  { slug: "gloves", label: "כפפות", parent: "accessories", aliases: ["כפפה", "כפפות", "כפפת"] },
   { slug: "bibs", label: "סינרים", parent: "accessories", aliases: ["סינר", "סינרים"] },
   { slug: "cloth-diapers", label: "חיתולי בד", parent: "accessories", aliases: ["חיתול בד", "חיתולי בד"] },
 ];
@@ -110,6 +127,15 @@ export function categoryLabel(slug: string): string {
 
 export function isKnownCategory(slug: string): boolean {
   return BY_SLUG.has(slug);
+}
+
+// The root of `slug`'s branch -- e.g. both "belts" and "hair-accessories"
+// return "accessories", both "shorts" and "pants" return "bottoms". Used to
+// tell a genuine family disagreement (a belt filed under "bottoms") apart
+// from two nodes that both legitimately describe the same garment.
+export function categoryFamily(slug: string): string {
+  const node = BY_SLUG.get(slug);
+  return node?.parent ? categoryFamily(node.parent) : slug;
 }
 
 // Best-effort read of a category straight from a title or a store's own

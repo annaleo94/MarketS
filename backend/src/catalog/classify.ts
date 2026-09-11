@@ -1,6 +1,6 @@
 import { prisma } from "../db/prisma";
 import { completeJson } from "../llm/openrouter.client";
-import { CATEGORIES, categoryFromText, isKnownCategory } from "./taxonomy";
+import { CATEGORIES, categoryFamily, categoryFromText, isKnownCategory } from "./taxonomy";
 import { env } from "../env";
 
 export type Gender = "boys" | "girls" | "unisex";
@@ -31,6 +31,33 @@ export function categoryFromStoreValue(raw: string | null | undefined): string |
   // so it must fall through to inference rather than be trusted.
   if (raw.trim() === "אחר") return null;
   return categoryFromText(raw);
+}
+
+// The store's own category and the title can each yield a slug; this picks
+// between them. A store value isn't always a per-product fact -- Castro's
+// adapter labels every product scraped off its "ילדים/מכנסיים" (boys'
+// pants) page "מכנסיים", but that page also lists belts, so every belt on
+// it inherited "bottoms" and leaked into pants searches ("חגורה קלאסית
+// בנים" showing up for "מכנסיים"). The hint is really describing the page,
+// not necessarily the product.
+//
+// So when the title names an ACCESSORY the store hint doesn't agree is one
+// -- a belt, a hat, a hair tie -- the title wins: a specific accessory word
+// is a very deliberate, unambiguous choice for a title to make, and stores
+// routinely cross-merchandise accessories onto a clothing page's listing
+// (exactly what happened here) but essentially never do the reverse. The
+// override stops there rather than at "any family mismatch" -- checked
+// against the live catalogue, a broader "title always wins" rule flips
+// titles like "חולצת גלישה" (a rash-guard swim shirt, correctly filed as
+// swimwear by the store) to "tops" purely because "חולצת" also appears in
+// it, which is a regression, not a fix.
+export function resolveCategory(storeValue: string | null | undefined, title: string): string | null {
+  const fromStore = categoryFromStoreValue(storeValue);
+  const fromTitle = categoryFromText(title);
+  if (fromTitle && categoryFamily(fromTitle) === "accessories" && categoryFamily(fromStore ?? "") !== "accessories") {
+    return fromTitle;
+  }
+  return fromStore ?? fromTitle;
 }
 
 interface Classified {
@@ -77,8 +104,10 @@ export async function classifyCatalog(): Promise<{ fromStore: number; fromLlm: n
 
   for (const product of pending) {
     // `category` holds whatever the store called it; the title is the
-    // fallback, since "חולצה ארוכה עם הדפס" names its own garment type.
-    const slug = categoryFromStoreValue(product.category) ?? categoryFromText(product.title);
+    // fallback, since "חולצה ארוכה עם הדפס" names its own garment type --
+    // unless the two flatly disagree on the garment family, in which case
+    // the title wins (see resolveCategory).
+    const slug = resolveCategory(product.category, product.title);
     if (slug) {
       if (await updateIfStillThere(product.id, { categorySlug: slug })) fromStore += 1;
     } else {
