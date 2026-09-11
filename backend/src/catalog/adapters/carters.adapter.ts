@@ -34,15 +34,26 @@ export const cartersAdapter: CatalogAdapter = {
       const found = extractProducts(html);
       if (found.length === 0) break;
 
+      let added = 0;
       for (const product of found) {
-        if (!byId.has(product.externalId)) byId.set(product.externalId, product);
+        if (byId.has(product.externalId)) continue;
+        byId.set(product.externalId, product);
+        added++;
       }
 
-      // See shopify.factory.ts's identical check: a non-empty page right
-      // at the cap means there may be more catalogue this run never saw.
+      // A page past the real end doesn't necessarily come back empty --
+      // see castro.adapter.ts's identical check, where this was confirmed
+      // live (the theme just keeps re-serving its last real page). The
+      // dedup above makes that harmless either way, but nothing used to
+      // stop the loop over it, so a page contributing nothing new is the
+      // real end-of-pagination signal, not just an empty one.
+      if (added === 0) break;
+
+      // A full page right at the cap means there may be genuinely more
+      // catalogue past it.
       if (page === env.ingestMaxPagesPerSource) {
         console.warn(
-          `[catalog] carters: hit the ${env.ingestMaxPagesPerSource}-page ingest cap with a full page still coming back -- this category may have more products than were fetched`
+          `[catalog] carters: hit the ${env.ingestMaxPagesPerSource}-page ingest cap with new products still coming back -- this category may have more products than were fetched`
         );
       }
     }

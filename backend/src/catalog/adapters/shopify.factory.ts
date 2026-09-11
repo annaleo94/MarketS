@@ -64,19 +64,30 @@ export function createShopifyAdapter(config: ShopifyStoreConfig): CatalogAdapter
           const products = data?.products ?? [];
           if (products.length === 0) break;
 
+          let added = 0;
           for (const p of products) {
             if (byId.has(p.id)) continue;
             const listing = toCatalogProduct(p, config);
-            if (listing) byId.set(p.id, listing);
+            if (listing) {
+              byId.set(p.id, listing);
+              added++;
+            }
           }
+
+          // Shopify's own JSON API reliably returns an empty array once a
+          // collection is exhausted (unlike Castro's theme -- see that
+          // adapter), so this is defence in depth rather than a fix for
+          // an observed failure here: a page contributing nothing new is
+          // treated as the end regardless of why.
+          if (added === 0) break;
 
           // A full page right as the cap is reached means there's more
           // catalogue on the far side of it -- silent otherwise, and that
           // silence is exactly what let Fox and Shilav sit at a fraction
           // of their real size for a long time before anyone noticed.
-          if (page === env.ingestMaxPagesPerSource && products.length > 0) {
+          if (page === env.ingestMaxPagesPerSource) {
             console.warn(
-              `[catalog] ${config.key}/${handle}: hit the ${env.ingestMaxPagesPerSource}-page ingest cap with a full page still coming back -- this collection may have more products than were fetched`
+              `[catalog] ${config.key}/${handle}: hit the ${env.ingestMaxPagesPerSource}-page ingest cap with new products still coming back -- this collection may have more products than were fetched`
             );
           }
         }

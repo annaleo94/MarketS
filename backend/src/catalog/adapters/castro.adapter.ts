@@ -80,15 +80,28 @@ export const castroAdapter: CatalogAdapter = {
         const products = extractProducts(html, category, storeGender);
         if (products.length === 0) break;
 
+        let added = 0;
         for (const product of products) {
-          if (!byId.has(product.externalId)) byId.set(product.externalId, product);
+          if (byId.has(product.externalId)) continue;
+          byId.set(product.externalId, product);
+          added++;
         }
 
-        // See shopify.factory.ts's identical check: a non-empty page right
-        // at the cap means there may be more catalogue this run never saw.
+        // A page past the real end of this category doesn't come back
+        // empty -- Castro's theme keeps re-serving its last real page
+        // instead. Confirmed live: page 10, page 20 and page 40 of one
+        // category all returned the exact same 13 products. The dedup
+        // above kept that harmless, but nothing had ever stopped the loop,
+        // so it ran the cap all the way to 40 reads of a 9MB page for zero
+        // new data. A page that adds nothing new is the real end signal.
+        if (added === 0) break;
+
+        // A full page right at the cap means there may be genuinely more
+        // catalogue past it -- distinct from the case above, where the
+        // page was non-empty but added nothing.
         if (page === env.ingestMaxPagesPerSource) {
           console.warn(
-            `[catalog] castro/${path}: hit the ${env.ingestMaxPagesPerSource}-page ingest cap with a full page still coming back -- this category may have more products than were fetched`
+            `[catalog] castro/${path}: hit the ${env.ingestMaxPagesPerSource}-page ingest cap with new products still coming back -- this category may have more products than were fetched`
           );
         }
       }
