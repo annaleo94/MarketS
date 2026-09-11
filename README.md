@@ -1,7 +1,7 @@
 # MarketS
 
 פיילוט: תארו פריט בגדים לתינוקות/ילדים במילים שלכם → רשימת החנויות שמוכרות
-אותו (פוקס, שילב, קרטרס), ממוינת מהזול ליקר. חיפוש בשפה חופשית מופעל ע"י LLM
+אותו (פוקס, שילב, קרטרס, קסטרו קידס), ממוינת מהזול ליקר. חיפוש בשפה חופשית מופעל ע"י LLM
 דרך [OpenRouter](https://openrouter.ai).
 
 **חי באוויר:** https://itl57pbfd8a9c.box.lathe.computer
@@ -66,6 +66,7 @@ npm run dev:frontend   # http://localhost:5173
 | פוקס | Shopify | `/collections/<handle>/products.json` -- endpoint JSON ציבורי רשמי של Shopify | `backend/src/catalog/adapters/fox.adapter.ts` |
 | שילב | Shopify | אותו endpoint, קטגוריית `fashion-clothing` | `backend/src/catalog/adapters/shilav.adapter.ts` |
 | קרטרס | Magento (Hyva) | פרסור HTML של דף הקטגוריה -- הכותרת/מחיר/קישור מגיעים מתוך JSON מובנה (Google Tag Manager `dataLayer`) שמוטמע בכל כרטיס מוצר, לא ניחוש CSS selectors | `backend/src/catalog/adapters/carters.adapter.ts` |
+| קסטרו קידס | Magento (ערכת נושא מותאמת) | פרסור HTML: JSON מובנה של כל מוצר -- שם/תמונה/קישור מתוך attribute של כפתור המועדפים, מחיר/מידות/מלאי מתוך config של הswatches, שניהם מקושרים לפי productId | `backend/src/catalog/adapters/castro.adapter.ts` |
 
 **מיננה** נבדקה ונמצאה חסומה ע"י אתגר בוט אקטיבי של Cloudflare
 (`cf-mitigated: challenge`) -- לא עקפנו את זה, כי זו הגנה מכוונת נגד גישה

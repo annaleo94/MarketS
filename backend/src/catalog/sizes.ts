@@ -18,6 +18,28 @@ export function parseSizeLabel(raw: string): MonthRange | null {
 
   if (/^(nb|newborn|ניובורן)$/.test(label)) return { min: 0, max: 3 };
 
+  // Footwear is on its own scale (EU sizes) and must not be read as an age
+  // at all -- checked before the bare-range rules below, which would
+  // otherwise happily misread e.g. "25-30" as an age range.
+  if (isShoeSizeLabel(label)) return null;
+
+  // "4-5", "6-7", "10-11", "12-14" -- a step of the years ladder written
+  // bare. Confirmed against Castro's own catalogue: every bare range no
+  // wider than two years, fully inside 1-14, that this store actually
+  // uses (4-5, 6-7, 8-9, 10-11, 12-13, 4-6, 6-8, 8-10, 10-12, 12-14, 2-4)
+  // appears only on its ילדים/ילדות (2-14y) pages -- never once on a baby
+  // page, where the equivalent months would be nonsensical (a "4-6" that
+  // meant months would overlap the 0-24m range every other store already
+  // covers with 0-3/3-6/6-12/12-18/18-24). Checked before the general
+  // month-range rule below, which would otherwise read every one of these
+  // as an implausible number of months instead.
+  const yearRange = label.match(/^(\d+)-(\d+)$/);
+  if (yearRange) {
+    const from = Number(yearRange[1]);
+    const to = Number(yearRange[2]);
+    if (from >= 1 && to <= 14 && to - from <= 2) return { min: from * YEAR, max: (to + 1) * YEAR };
+  }
+
   // "18-24m", "0-3", "3-6"
   const range = label.match(/^(\d+)-(\d+)\s*(m|מ|ח)?$/);
   if (range) {
@@ -51,6 +73,31 @@ export function parseSizeLabel(raw: string): MonthRange | null {
   return null;
 }
 
+// Footwear (and foot-sized accessories like socks sold by shoe-size band)
+// is on its own EU scale, which says nothing about the wearer's age. Any
+// label naming or spanning that scale counts -- not just every label on
+// the product, since one unrelated entry shouldn't rescue the reading:
+// Castro lists some shoes as a single combined band ("25-30") alongside
+// individual sizes ("22".."35") elsewhere in the same catalogue.
+export function isShoeSizeLabel(raw: string): boolean {
+  const label = raw.trim().replace(/\s+/g, "");
+  // Lower bound is 22, not the true minimum EU shoe size (which runs
+  // lower): "18-24" is an extremely common, load-bearing month range used
+  // by every store here, and 15-21 would have swallowed it whole -- both
+  // endpoints of a range must clear this bound, so "18-24" fails on 18
+  // long before "24" is even considered. 22 is also the lowest shoe size
+  // actually seen in the one catalogue that has them.
+  const inShoeRange = (n: number) => Number.isFinite(n) && n >= 22 && n <= 45;
+
+  const single = Number(label);
+  if (inShoeRange(single)) return true;
+
+  const range = label.match(/^(\d+)-(\d+)$/);
+  if (range) return inShoeRange(Number(range[1])) && inShoeRange(Number(range[2]));
+
+  return false;
+}
+
 // Every size a product is stocked in, as its own range. Deliberately not
 // merged into one span: a product sold in 0-3m and 5y would span
 // everything in between and answer requests for sizes it doesn't stock.
@@ -68,8 +115,16 @@ export function productSizeRanges(sizesCsv: string | null): MonthRange[] {
 // that (the shopper still sees the size list and can judge).
 export function productHasSize(sizesCsv: string | null, requested: MonthRange): boolean {
   const ranges = productSizeRanges(sizesCsv);
-  if (ranges.length === 0) return true;
-  return ranges.some((r) => rangesOverlap(r, requested));
+  if (ranges.length > 0) return ranges.some((r) => rangesOverlap(r, requested));
+
+  // Nothing on the age scale. If any label here is recognisably a shoe
+  // size, the product is sized by foot, not age, and excluding it is
+  // right -- the fallback below would otherwise have it match every age
+  // there is. Genuinely unreadable sizing (a bare "OS") still passes.
+  const labels = (sizesCsv ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (labels.some(isShoeSizeLabel)) return false;
+
+  return true;
 }
 
 // What the shopper asked for, in months: "שנתיים", "גיל 3 חודשים",

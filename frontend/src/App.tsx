@@ -39,7 +39,7 @@ export default function App() {
     <div className="page">
       <header className="header">
         <h1>MarketS</h1>
-        <p className="tagline">פיילוט: בגדי תינוקות וילדים — פוקס, שילב וקרטרס</p>
+        <p className="tagline">פיילוט: בגדי תינוקות וילדים — פוקס, שילב, קרטרס וקסטרו קידס</p>
         <p className="subtagline">
           תארו את הפריט במילים שלכם — "בגד ים מידה שנתיים", "חולצה לבנה לחג לבנות מידה 2"
         </p>
