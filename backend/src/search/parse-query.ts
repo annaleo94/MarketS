@@ -1,5 +1,5 @@
 import { completeJson } from "../llm/openrouter.client";
-import { CATEGORIES, categoryFromText, isKnownCategory } from "../catalog/taxonomy";
+import { CATEGORIES, categoryFromText, isKnownCategory, legStyleFromText } from "../catalog/taxonomy";
 import { parseRequestedSize, MonthRange } from "../catalog/sizes";
 import { colorFromTitle } from "../catalog/colors";
 import { env } from "../env";
@@ -13,6 +13,7 @@ export interface ParsedQuery {
   sizeLabel: string | null; // how the shopper phrased it, for the filter chip
   gender: Gender | null;
   color: string | null;
+  legStyle: "footed" | "footless" | null; // "אוברול עם רגליות" / "מכנס בלי רגליות"
   style: string | null;
   semanticQuery: string; // the descriptive remainder, used for ranking
 }
@@ -28,6 +29,7 @@ export function parseQueryLocally(raw: string): ParsedQuery {
     sizeLabel: size ? raw.match(/(מידה|גיל)\s*[\w֐-׿-]+/)?.[0] ?? null : null,
     gender: genderFromQuery(raw),
     color: colorFromTitle(raw),
+    legStyle: legStyleFromText(raw),
     style: null,
     semanticQuery: raw,
   };
@@ -47,6 +49,7 @@ interface LlmParsed {
   category?: string | null;
   gender?: string | null;
   color?: string | null;
+  legStyle?: string | null;
   style?: string | null;
   ageMonths?: number | null;
   semanticQuery?: string | null;
@@ -71,8 +74,11 @@ export async function parseQuery(raw: string): Promise<ParsedQuery> {
         'שים לב: "לבנה"/"לבנות" הם בדרך כלל הצבע לבן ולא מגדר. ' +
         "ageMonths: הגיל שהלקוח ביקש בחודשים (שנתיים=24, 3 חודשים=3), או null. " +
         "color: שם הצבע בעברית או null. style: אירוע/סגנון כמו 'חג', 'ספורט', או null. " +
+        "legStyle: רלוונטי רק לאוברול/מכנסיים -- \"footed\" אם הלקוח ביקש שהבגד סגור מעל כפות הרגליים " +
+        "('עם רגליות', 'עם כפות רגליים'), \"footless\" אם ביקש שהרגליים יהיו חשופות/פתוחות " +
+        "('בלי רגליות', 'ללא רגליות', 'עם קרסול פתוח'), אחרת null. " +
         "semanticQuery: תיאור הפריט במילים של הלקוח, בלי המידה והמגדר. " +
-        'ענה אך ורק ב-JSON: {"category":..., "gender":..., "color":..., "style":..., "ageMonths":..., "semanticQuery":...}',
+        'ענה אך ורק ב-JSON: {"category":..., "gender":..., "color":..., "legStyle":..., "style":..., "ageMonths":..., "semanticQuery":...}',
     },
     { role: "user", content: raw },
   ]);
@@ -91,9 +97,15 @@ export async function parseQuery(raw: string): Promise<ParsedQuery> {
     sizeLabel: size ? local.sizeLabel ?? `${size.min} חודשים` : null,
     gender: normalizeGender(response.gender) ?? local.gender,
     color: response.color ? colorFromTitle(response.color) ?? local.color : local.color,
+    legStyle: normalizeLegStyle(response.legStyle) ?? local.legStyle,
     style: response.style ?? null,
     semanticQuery: response.semanticQuery?.trim() || raw,
   };
+}
+
+function normalizeLegStyle(raw: string | null | undefined): "footed" | "footless" | null {
+  if (raw === "footed" || raw === "footless") return raw;
+  return null;
 }
 
 function normalizeGender(raw: string | null | undefined): Gender | null {

@@ -1,15 +1,26 @@
 // How an item answers the colour that was asked for. "other" is a known
 // colour that isn't it -- shown, but marked and listed after the matches.
 export type ColorMatch = "exact" | "pack" | "unknown" | "other";
+// Same idea for "עם/בלי רגליות" on overalls and pants -- no "pack" tier,
+// a garment either has built-in feet or it doesn't.
+export type LegStyleMatch = "exact" | "unknown" | "other";
 
 const COLOR_MATCH_RANK: Record<ColorMatch, number> = { exact: 0, pack: 1, unknown: 2, other: 3 };
+const LEG_STYLE_MATCH_RANK: Record<LegStyleMatch, number> = { exact: 0, unknown: 1, other: 2 };
 
 // Mirrors the server's ordering so the flat "compare by price" view shows
 // the same items in the same order the grouped view does, just merged.
 export function compareForDisplay(a: SearchResultItem, b: SearchResultItem): number {
-  const rank = (i: SearchResultItem) => COLOR_MATCH_RANK[i.colorMatch ?? "exact"];
-  const tier = rank(a) - rank(b);
-  return tier !== 0 ? tier : a.price - b.price;
+  const legTier = LEG_STYLE_MATCH_RANK[a.legStyleMatch ?? "exact"] - LEG_STYLE_MATCH_RANK[b.legStyleMatch ?? "exact"];
+  if (legTier !== 0) return legTier;
+  const colorTier = COLOR_MATCH_RANK[a.colorMatch ?? "exact"] - COLOR_MATCH_RANK[b.colorMatch ?? "exact"];
+  return colorTier !== 0 ? colorTier : a.price - b.price;
+}
+
+// Combined rank used to find "the best tier actually present" without
+// enumerating every (legStyle, color) tier pair by hand -- see Results.tsx.
+export function matchRank(i: SearchResultItem): number {
+  return LEG_STYLE_MATCH_RANK[i.legStyleMatch ?? "exact"] * 4 + COLOR_MATCH_RANK[i.colorMatch ?? "exact"];
 }
 
 export interface SearchResultItem {
@@ -26,6 +37,8 @@ export interface SearchResultItem {
   // because a search cached before this field existed won't carry it.
   colors?: string[];
   colorMatch?: ColorMatch;
+  legStyle?: string | null;
+  legStyleMatch?: LegStyleMatch;
   categorySlug: string | null;
   gender: string;
   score: number;
@@ -38,7 +51,7 @@ export interface StoreResults {
 }
 
 export interface AppliedFilter {
-  kind: "category" | "size" | "gender" | "color";
+  kind: "category" | "size" | "gender" | "color" | "legStyle";
   label: string;
 }
 

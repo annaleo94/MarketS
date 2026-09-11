@@ -43,6 +43,13 @@ ingestRoute.post("/admin/ingest", async (req, res) => {
   // LLM call, same as any other ingest.
   const reclassify = req.query.reclassify === "1";
 
+  // ?releg=1 mirrors ?recolor=1 for Product.legStyle: clears whatever was
+  // previously detected (title or vision, including "none") so an improved
+  // detector -- or a taxonomy change to LEG_STYLE_CATEGORIES -- can revisit
+  // it. Not folded into ?reclassify=1: category and leg style are derived
+  // independently and can each be wrong without the other being wrong.
+  const releg = req.query.releg === "1";
+
   ingestInProgress = true;
   Promise.resolve()
     .then(async () => {
@@ -54,6 +61,13 @@ ingestRoute.post("/admin/ingest", async (req, res) => {
           data: { color: null, colors: null, colorSource: null, colorIsSolid: null },
         });
         console.log(`[ingest] cleared ${count} photo-derived colour(s) for re-detection`);
+      }
+      if (releg) {
+        const { count } = await prisma.product.updateMany({
+          where: { legStyleSource: { in: ["title", "vision", "none"] } },
+          data: { legStyle: null, legStyleSource: null },
+        });
+        console.log(`[ingest] cleared ${count} leg style value(s) for re-detection`);
       }
       if (reclassify) {
         const { count } = await prisma.product.updateMany({

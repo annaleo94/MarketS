@@ -2,6 +2,7 @@ import { prisma } from "../db/prisma";
 import { catalogAdapters } from "./registry";
 import { CatalogAdapter } from "./types";
 import { enrichColors } from "./enrich-colors";
+import { enrichLegStyles } from "./enrich-leg-style";
 import { classifyCatalog, genderFromStoreValue } from "./classify";
 
 export interface IngestSummary {
@@ -102,6 +103,14 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
   const colors = await enrichColors();
   console.log(
     `[ingest] colours: ${colors.fromTitle} from titles, ${colors.fromVision} from photos, ${colors.unresolved} still pending`
+  );
+
+  // Whether overalls/pants have built-in feet or not -- runs after
+  // classifyCatalog() since it only looks at products already categorised
+  // into the overall/pants family.
+  const legStyles = await enrichLegStyles();
+  console.log(
+    `[ingest] leg style: ${legStyles.fromTitle} from titles, ${legStyles.fromVision} from photos, ${legStyles.unresolved} still pending`
   );
 
   // Cached searches point at the catalog we just replaced -- their prices

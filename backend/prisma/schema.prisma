@@ -65,6 +65,13 @@ model Product {
   // is misleading -- a cream shirt with mustard sleeves is not what someone
   // asking for a white shirt means. Null when unknown.
   colorIsSolid Boolean?
+  // Whether an overall/pants-family garment has built-in closed feet
+  // ("עם רגליות") or open ankles ("בלי רגליות") -- rarely stated in the
+  // title, so it's read off the product photo the same way colour is.
+  // Only meaningful (and only ever populated) for categorySlug values in
+  // LEG_STYLE_CATEGORIES (see catalog/taxonomy.ts); "footed" | "footless".
+  legStyle       String?
+  legStyleSource String? // "title" | "vision" | "none" (looked, couldn't tell)
   updatedAt  DateTime @updatedAt
   createdAt  DateTime @default(now())
 

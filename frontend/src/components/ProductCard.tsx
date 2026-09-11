@@ -1,6 +1,7 @@
 import { SearchResultItem } from "../api";
 
 const currencySymbol: Record<string, string> = { ILS: "₪", USD: "$", EUR: "€" };
+const legStyleLabels: Record<string, string> = { footed: "עם רגליות", footless: "בלי רגליות" };
 
 export function ProductCard({ item, isCheapest }: { item: SearchResultItem; isCheapest: boolean }) {
   const symbol = currencySymbol[item.currency] ?? item.currency;
@@ -21,10 +22,15 @@ export function ProductCard({ item, isCheapest }: { item: SearchResultItem; isCh
         ) : (
           item.color && <div className="product__meta">צבע: {item.color}</div>
         )}
+        {item.legStyle && (
+          <div className="product__meta">{legStyleLabels[item.legStyle] ?? item.legStyle}</div>
+        )}
       </div>
 
       <div className="product__buy">
-        {item.colorMatch === "other" && <span className="badge badge--alternative">חלופה קרובה</span>}
+        {(item.colorMatch === "other" || item.legStyleMatch === "other") && (
+          <span className="badge badge--alternative">חלופה קרובה</span>
+        )}
         {isCheapest && <span className="badge badge--cheapest">הכי זול</span>}
         <div className="product__price">
           {symbol}

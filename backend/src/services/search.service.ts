@@ -18,6 +18,8 @@ export interface SearchResultItem {
   color: string | null;
   colors: string[]; // every colour in the listing -- more than one for a multipack
   colorMatch: ColorMatch;
+  legStyle: string | null;
+  legStyleMatch: LegStyleMatch;
   categorySlug: string | null;
   gender: string;
   score: number;
@@ -30,7 +32,7 @@ export interface StoreResults {
 }
 
 export interface AppliedFilter {
-  kind: "category" | "size" | "gender" | "color";
+  kind: "category" | "size" | "gender" | "color" | "legStyle";
   label: string;
 }
 
@@ -73,6 +75,33 @@ function colorMatchFor(
   return colors.length === 1 && product.colorIsSolid !== false ? "exact" : "pack";
 }
 
+// Same shape as ColorMatch, one tier simpler (no "pack" concept -- a
+// garment either has built-in feet or it doesn't, never both at once).
+export type LegStyleMatch = "exact" | "unknown" | "other";
+
+const LEG_STYLE_MATCH_RANK: Record<LegStyleMatch, number> = { exact: 0, unknown: 1, other: 2 };
+
+function legStyleMatchFor(product: { legStyle: string | null }, wanted: string | null): LegStyleMatch {
+  if (!wanted) return "exact";
+  if (!product.legStyle) return "unknown";
+  return product.legStyle === wanted ? "exact" : "other";
+}
+
+// Narrows `items` to whichever answer the shopper's request when one was
+// made, falling back to the unfiltered set (flagged) rather than an empty
+// page when nothing on record answers it -- the same rule colour and leg
+// style both need, so both funnel through this instead of duplicating it.
+function narrowByMatch<T>(
+  items: T[],
+  matchOf: (item: T) => "exact" | "pack" | "unknown" | "other",
+  askedFor: boolean
+): { visible: T[]; showingAlternatives: boolean } {
+  if (!askedFor) return { visible: items, showingAlternatives: false };
+  const onTarget = items.filter((item) => matchOf(item) !== "other");
+  if (onTarget.length > 0) return { visible: onTarget, showingAlternatives: false };
+  return { visible: items, showingAlternatives: items.length > 0 };
+}
+
 export async function search(rawQuery: string, overrides?: Partial<ParsedQuery>): Promise<SearchResponse> {
   const normalizedQuery = normalizeQuery(rawQuery);
   if (!normalizedQuery) return emptyResponse(rawQuery, normalizedQuery);
@@ -113,24 +142,30 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
 
   // --- Soft signals. These only order what survived above.
   const scored = sizeFiltered
-    .map((product) => ({ product, score: scoreProduct(product, parsed), colorMatch: colorMatchFor(product, parsed.color) }))
+    .map((product) => ({
+      product,
+      score: scoreProduct(product, parsed),
+      colorMatch: colorMatchFor(product, parsed.color),
+      legStyleMatch: legStyleMatchFor(product, parsed.legStyle),
+    }))
     .filter((entry) => entry.score >= env.searchMinScore)
     .sort((a, b) => b.score - a.score);
 
-  // Asked for a colour, and something actually comes in it? Then a garment
-  // in a different colour is simply a wrong answer, and is dropped -- the
-  // shopper asked for white. Only when nothing in the catalogue answers the
-  // colour do the near-misses earn their place, shown and marked rather
-  // than leaving the shopper with an empty page. Deciding this on the
-  // colour tier rather than the score keeps it consistent: before, a
-  // strongly-worded title absorbed the mismatch penalty and a blue bikini
-  // came back for "ביקיני לבנה", while a plainly-titled grey shirt didn't.
-  const onTarget = scored.filter((entry) => entry.colorMatch !== "other");
-  const showingAlternatives = parsed.color !== null && onTarget.length === 0 && scored.length > 0;
-  const visible = parsed.color && onTarget.length > 0 ? onTarget : scored;
+  // Asked for a colour, or for feet-open/feet-closed, and something
+  // actually answers it? Then anything that doesn't is simply a wrong
+  // answer, and is dropped -- the shopper asked for white, or for footed.
+  // Only when nothing in the catalogue answers the request do the
+  // near-misses earn their place, shown and marked rather than leaving the
+  // shopper with an empty page. Leg style is narrowed first (it's closer
+  // to a garment-shape fact than colour is), then colour within whatever
+  // survives that -- same rule, applied twice, rather than duplicated.
+  const afterLegStyle = narrowByMatch(scored, (e) => e.legStyleMatch, parsed.legStyle !== null);
+  const afterColor = narrowByMatch(afterLegStyle.visible, (e) => e.colorMatch, parsed.color !== null);
+  const showingAlternatives = afterLegStyle.showingAlternatives || afterColor.showingAlternatives;
+  const visible = afterColor.visible;
 
   const byStore = new Map<string, SearchResultItem[]>();
-  for (const { product, score, colorMatch } of visible) {
+  for (const { product, score, colorMatch, legStyleMatch } of visible) {
     const items = byStore.get(product.storeId) ?? [];
     items.push({
       id: product.id,
@@ -144,6 +179,8 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
       color: product.color,
       colors: productColors(product),
       colorMatch,
+      legStyle: product.legStyle,
+      legStyleMatch,
       categorySlug: product.categorySlug,
       gender: product.gender,
       score,
@@ -179,17 +216,26 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
 // Cheapest-first is the whole point of the tool, but only among items that
 // actually answer the request: a shopper asking for a white shirt wants the
 // cheapest *white* one, not the cheapest thing that happens to be a shirt.
-// So colour tier leads and price sorts within it -- the near-misses are
-// still there, listed after, and marked in the UI.
+// So leg-style tier leads (it's the garment-shape fact), colour tier breaks
+// ties within it, and price sorts within that -- the near-misses are still
+// there, listed after, and marked in the UI.
 export function compareForDisplay(a: SearchResultItem, b: SearchResultItem): number {
-  const tier = COLOR_MATCH_RANK[a.colorMatch] - COLOR_MATCH_RANK[b.colorMatch];
-  return tier !== 0 ? tier : a.price - b.price;
+  const legTier = LEG_STYLE_MATCH_RANK[a.legStyleMatch] - LEG_STYLE_MATCH_RANK[b.legStyleMatch];
+  if (legTier !== 0) return legTier;
+  const colorTier = COLOR_MATCH_RANK[a.colorMatch] - COLOR_MATCH_RANK[b.colorMatch];
+  return colorTier !== 0 ? colorTier : a.price - b.price;
 }
 
-// Ranking only. A colour or style mismatch pushes an item down the list;
-// it never removes it, because the shopper may well still want it.
+// Ranking only. A colour, leg-style or style mismatch pushes an item down
+// the list; it never removes it, because the shopper may well still want it.
 function scoreProduct(
-  product: { title: string; color: string | null; colors: string | null; colorIsSolid: boolean | null },
+  product: {
+    title: string;
+    color: string | null;
+    colors: string | null;
+    colorIsSolid: boolean | null;
+    legStyle: string | null;
+  },
   parsed: ParsedQuery
 ): number {
   let score = relevanceScore(parsed.semanticQuery, product.title);
@@ -209,14 +255,19 @@ function scoreProduct(
     else if (match === "pack") score += 0.3;
   }
 
+  if (parsed.legStyle && legStyleMatchFor(product, parsed.legStyle) === "exact") score += 0.6;
+
   if (parsed.style && relevanceScore(parsed.style, product.title) > 0.5) score += 0.2;
 
   return Math.max(0, Math.min(1.5, score));
 }
 
+const LEG_STYLE_LABELS: Record<string, string> = { footed: "עם רגליות", footless: "בלי רגליות" };
+
 function describeFilters(parsed: ParsedQuery): AppliedFilter[] {
   const filters: AppliedFilter[] = [];
   if (parsed.categorySlug) filters.push({ kind: "category", label: categoryLabel(parsed.categorySlug) });
+  if (parsed.legStyle) filters.push({ kind: "legStyle", label: LEG_STYLE_LABELS[parsed.legStyle] });
   if (parsed.size) {
     filters.push({ kind: "size", label: parsed.sizeLabel ?? `${parsed.size.min}-${parsed.size.max} חודשים` });
   }
@@ -230,7 +281,7 @@ function describeFilters(parsed: ParsedQuery): AppliedFilter[] {
 // would go on serving the old one until the TTL ran out, quietly missing
 // the new fields. Bump this whenever either changes; old entries then miss
 // and are rewritten rather than being served half-formed.
-const RESULTS_SCHEMA_VERSION = 3;
+const RESULTS_SCHEMA_VERSION = 4;
 
 function buildCacheKey(normalizedQuery: string, overrides?: Partial<ParsedQuery>): string {
   const base = `v${RESULTS_SCHEMA_VERSION}:${normalizedQuery}`;

@@ -22,6 +22,7 @@ searchRoute.get("/search", async (req, res) => {
   if (dropped.includes("size")) overrides.size = null;
   if (dropped.includes("gender")) overrides.gender = null;
   if (dropped.includes("color")) overrides.color = null;
+  if (dropped.includes("legStyle")) overrides.legStyle = null;
 
   try {
     const result = await search(q, overrides);

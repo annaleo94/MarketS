@@ -124,6 +124,20 @@ export function isKnownCategory(slug: string): boolean {
 // substring match below, which has no way to tell the two apart itself.
 const LEGGINGS_CUT_DESCRIPTOR = /(עם|ללא|בלי)\s+רגליות/;
 
+// Categories where "with/without built-in feet" is a real, filterable
+// attribute (see Product.legStyle) -- overalls and long pants specifically,
+// not shorts/skirts/leggings, matching what was actually asked for.
+export const LEG_STYLE_CATEGORIES = ["overall", "pants", "bottoms"];
+
+// Reads leg style straight off a title when the store or listing states it
+// outright ("אוברול ארוך דינוזאורים ללא רגליות"). Free and exact, tried
+// before spending a vision call -- see catalog/enrich-leg-style.ts.
+export function legStyleFromText(text: string): "footed" | "footless" | null {
+  const match = text.match(LEGGINGS_CUT_DESCRIPTOR);
+  if (!match) return null;
+  return match[1] === "עם" ? "footed" : "footless";
+}
+
 export function categoryFromText(text: string): string | null {
   const haystack = text.toLowerCase();
 
