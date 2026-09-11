@@ -31,7 +31,12 @@ export const CATEGORIES: CategoryNode[] = [
   // --- bottoms ---
   { slug: "bottoms", label: "מכנסיים וחצאיות", aliases: ["מכנס", "מכנסיים", "תחתון"] },
   { slug: "shorts", label: "מכנסיים קצרים", parent: "bottoms", aliases: ["מכנסיים קצרים", "מכנס קצר", "שורט"] },
-  { slug: "pants", label: "מכנסיים ארוכים", parent: "bottoms", aliases: ["מכנסיים ארוכים", "מכנס ארוך", "גינס", "ג'ינס"] },
+  // "ג'ינס"/"גינס" bare is a fabric ("denim"), not a garment -- it showed
+  // up on jean jackets, shirts, dresses and skirts too, all mistagged as
+  // pants. Only the compound phrases that actually name jeans-the-pants
+  // are aliases here; a jean jacket still matches "ג'קט" (outerwear), a
+  // denim skirt "חצאית" (skirt), each via its own node.
+  { slug: "pants", label: "מכנסיים ארוכים", parent: "bottoms", aliases: ["מכנסיים ארוכים", "מכנס ארוך", "מכנסי ג'ינס", "מכנס ג'ינס", "מכנסי גינס", "מכנס גינס"] },
   { slug: "leggings", label: "טייצים", parent: "bottoms", aliases: ["טייץ", "טייצים", "רגליות"] },
   { slug: "skirt", label: "חצאיות", parent: "bottoms", aliases: ["חצאית", "חצאיות"] },
 
@@ -46,7 +51,7 @@ export const CATEGORIES: CategoryNode[] = [
 
   // --- extras ---
   { slug: "shoes", label: "הנעלה", aliases: ["נעל", "נעלי", "סנדל", "מגף", "כפכף"] },
-  { slug: "accessories", label: "אביזרים", aliases: ["גרב", "גרביים", "כובע", "צעיף", "כפפות", "חיתול בד", "סינר"] },
+  { slug: "accessories", label: "אביזרים", aliases: ["גרב", "גרביים", "כובע", "צעיף", "כפפות", "חיתול בד", "סינר", "חגורה", "חגורות"] },
 ];
 
 const BY_SLUG = new Map(CATEGORIES.map((c) => [c.slug, c]));
@@ -72,6 +77,15 @@ export function isKnownCategory(slug: string): boolean {
 // Best-effort read of a category straight from a title or a store's own
 // category string. Longer aliases are tried first so "חולצה ארוכה" wins
 // over the bare "חולצה", and child categories are preferred over parents.
+// "רגליות" names the leggings product ("שלישיית רגליות") -- but the exact
+// same word, in "עם רגליות" / "ללא רגליות" / "בלי רגליות", describes
+// whether a DIFFERENT garment (an overall, a onesie) has integrated feet.
+// "אוברול ארוך דינוזאורים ללא רגליות" is an overall, not a pair of
+// leggings; matching it as one put it in front of every leggings search
+// and dropped it out of every overall one. Checked before the general
+// substring match below, which has no way to tell the two apart itself.
+const LEGGINGS_CUT_DESCRIPTOR = /(עם|ללא|בלי)\s+רגליות/;
+
 export function categoryFromText(text: string): string | null {
   const haystack = text.toLowerCase();
 
@@ -80,6 +94,7 @@ export function categoryFromText(text: string): string | null {
   ).sort((a, b) => b.alias.length - a.alias.length || Number(b.isChild) - Number(a.isChild));
 
   for (const { slug, alias } of candidates) {
+    if (alias === "רגליות" && LEGGINGS_CUT_DESCRIPTOR.test(haystack)) continue;
     if (haystack.includes(alias)) return slug;
   }
   return null;
