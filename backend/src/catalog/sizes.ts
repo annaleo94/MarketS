@@ -16,7 +16,17 @@ export function parseSizeLabel(raw: string): MonthRange | null {
   const label = raw.trim().toLowerCase().replace(/\s+/g, "");
   if (!label) return null;
 
-  if (/^(nb|newborn|ניובורן)$/.test(label)) return { min: 0, max: 3 };
+  // The newborn family, as the four stores actually write it: NB, Fox's
+  // dotted N.B, and Shilav's SNB / XSNB / XXSNB (small and preemie
+  // newborn). Only bare "NB" was recognised, so the rest fell through
+  // every rule below and came out unparsed -- and an unparsed size means
+  // "we can't tell", which lets the product answer EVERY age. That is how
+  // a newborn-only "מארז 3 רגליות/מכנסיים" sized XXSNB,XSNB turned up in a
+  // search for מידה 2. Preemie sizes really sit below newborn, but they
+  // are folded into the same 0-3m band: the distinction changes nothing
+  // any shopper here searches for, while keeping them out of older ages
+  // is the whole point.
+  if (/^(x*s?n\.?b|newborn|ניובורן)$/.test(label)) return { min: 0, max: 3 };
 
   // Footwear is on its own scale (EU sizes) and must not be read as an age
   // at all -- checked before the bare-range rules below, which would

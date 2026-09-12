@@ -176,7 +176,15 @@ const SIZE_CASES: { sizes: string; query: string; expect: boolean; note: string 
   { sizes: "4-5", query: "חולצה מידה 6", expect: false, note: "and stops there" },
   { sizes: "22,23,24", query: "נעליים מידה 2", expect: false, note: "shoe sizes are not ages and never answer one" },
   { sizes: "25-30", query: "נעליים מידה 2", expect: false, note: "nor is a combined shoe band" },
-  { sizes: "OS", query: "כובע מידה 2", expect: true, note: "unreadable sizing is not a reason to hide stock" },
+  { sizes: "OS", query: "כובע מידה 2", expect: true, note: "genuinely unreadable sizing is not a reason to hide stock" },
+  {
+    sizes: "XXSNB,XSNB",
+    query: "מכנסיים מידה 2",
+    expect: false,
+    note: "preemie/newborn sizes must not answer a two-year-old -- unrecognised labels count as 'can't tell', which matches every age",
+  },
+  { sizes: "N.B", query: "בגד גוף מידה 2", expect: false, note: "Fox writes newborn with a dot; it is still newborn" },
+  { sizes: "N.B,SNB", query: "בגד גוף 1 חודש", expect: true, note: "and it still answers the age it is for" },
 ];
 for (const c of SIZE_CASES) {
   const requested = parseRequestedSize(c.query);
