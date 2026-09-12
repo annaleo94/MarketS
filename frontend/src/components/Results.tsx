@@ -13,6 +13,12 @@ export function Results({ data, onDropFilter }: Props) {
 
   const allItems = data.stores.flatMap((s) => s.items);
 
+  // Which store each item came from. The grouped view gets this from its
+  // heading; the merged "compare by price" view has no heading at all, so
+  // without this its cards -- and anything saved from them -- would carry
+  // a price with no shop attached.
+  const storeOf = new Map(data.stores.flatMap((s) => s.items.map((i) => [i.id, s.store])));
+
   // "Cheapest" has to mean cheapest among the items that actually answer the
   // request. Items whose colour or leg style we never resolved are excluded
   // too: they sort below the confirmed matches, so the cheapest of them is
@@ -71,7 +77,13 @@ export function Results({ data, onDropFilter }: Props) {
           {[...allItems]
             .sort(compareForDisplay)
             .map((item) => (
-              <ProductCard key={item.id} item={item} isCheapest={item.price === cheapestOverall} />
+              <ProductCard
+                key={item.id}
+                item={item}
+                store={storeOf.get(item.id)!}
+                showStore
+                isCheapest={item.price === cheapestOverall}
+              />
             ))}
         </ul>
       ) : (

@@ -38,7 +38,12 @@ export function StoreGroup({ group }: { group: StoreResults }) {
 
       <ul className="store-group__items">
         {visible.map((item) => (
-          <ProductCard key={item.id} item={item} isCheapest={item.price === cheapestInStore} />
+          <ProductCard
+            key={item.id}
+            item={item}
+            store={group.store}
+            isCheapest={item.price === cheapestInStore}
+          />
         ))}
       </ul>
 

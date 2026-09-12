@@ -6,6 +6,7 @@ import { env } from "./env";
 import { searchRoute } from "./routes/search.route";
 import { storesRoute } from "./routes/stores.route";
 import { ingestRoute } from "./routes/ingest.route";
+import { savedRoute } from "./routes/saved.route";
 import { prisma } from "./db/prisma";
 import { runIngest } from "./catalog/ingest";
 import { startScheduler } from "./catalog/scheduler";
@@ -19,6 +20,7 @@ async function main() {
   app.use("/api", searchRoute);
   app.use("/api", storesRoute);
   app.use("/api", ingestRoute);
+  app.use("/api", savedRoute);
 
   // In production this one container serves both the API and the built
   // frontend (see the root Dockerfile) -- same origin, no CORS needed for

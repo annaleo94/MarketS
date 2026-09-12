@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { SearchBar } from "./components/SearchBar";
 import { Results } from "./components/Results";
+import { SavedButton } from "./components/SavedButton";
+import { SavedPanel } from "./components/SavedPanel";
+import { SavedProvider } from "./saved";
 import { searchProducts, SearchResponse, AppliedFilter } from "./api";
 
 export default function App() {
@@ -9,6 +12,7 @@ export default function App() {
   const [dropped, setDropped] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedOpen, setSavedOpen] = useState(false);
 
   async function run(q: string, drop: string[]) {
     setLoading(true);
@@ -36,7 +40,10 @@ export default function App() {
   }
 
   return (
-    <>
+    <SavedProvider>
+      <SavedButton onOpen={() => setSavedOpen(true)} />
+      <SavedPanel open={savedOpen} onClose={() => setSavedOpen(false)} />
+
       <header className="hero">
         <div className="hero__blob hero__blob--1" />
         <div className="hero__blob hero__blob--2" />
@@ -69,6 +76,6 @@ export default function App() {
           </p>
         </footer>
       </div>
-    </>
+    </SavedProvider>
   );
 }
