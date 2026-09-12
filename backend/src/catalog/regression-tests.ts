@@ -20,6 +20,7 @@ import { resolveCategory } from "./classify";
 import { categoryFromText, legStyleFromText } from "./taxonomy";
 import { suppressAmbiguousWhiteForGirls } from "../search/parse-query";
 import { diffProduct, diffDelisted, StoredProduct } from "./history";
+import { productHasSize, parseRequestedSize } from "./sizes";
 
 interface CategoryCase {
   title: string;
@@ -146,6 +147,41 @@ for (const c of LEG_STYLE_CASES) {
 for (const c of AMBIGUOUS_COLOR_CASES) {
   const got = suppressAmbiguousWhiteForGirls(c.raw, c.gender, c.colorIn);
   check(got === c.expect, `[ambiguous color] ${c.note} -- "${c.raw}"`, got, c.expect);
+}
+
+// --- size matching ----------------------------------------------------
+// Size is a hard filter: a product that fails it is deleted from the
+// results, not ranked lower, so every one of these is the difference
+// between a shopper seeing a garment and never knowing it existed.
+// The first case is a real report from the live site -- a Shilav skirt
+// stocked up to 18-24m that never appeared in a search for מידה 2.
+const SIZE_CASES: { sizes: string; query: string; expect: boolean; note: string }[] = [
+  {
+    sizes: "NB,0-3m,3-6m,6-12m,12-18m,18-24m",
+    query: "חצאית מידה 2",
+    expect: true,
+    note: "18-24m IS what a two-year-old wears -- the top of a month range is a month that still fits",
+  },
+  { sizes: "NB,0-3m", query: "בגד גוף 3 חודשים", expect: true, note: "0-3m fits a three-month-old" },
+  { sizes: "6-12m,12-18m", query: "פיג'מה 18 חודשים", expect: true, note: "12-18m fits an eighteen-month-old" },
+  {
+    sizes: "6-12m,12-18m",
+    query: "חצאית מידה 2",
+    expect: false,
+    note: "but a rung further down does NOT -- the fix must not swallow the whole ladder",
+  },
+  { sizes: "2Y,3Y", query: "חולצה מידה 2", expect: true, note: "the plain year label still works" },
+  { sizes: "2Y", query: "חולצה מידה 3", expect: false, note: "a 2Y garment is not size 3" },
+  { sizes: "4-5", query: "חולצה מידה 5", expect: true, note: "the years ladder covers all of its top year" },
+  { sizes: "4-5", query: "חולצה מידה 6", expect: false, note: "and stops there" },
+  { sizes: "22,23,24", query: "נעליים מידה 2", expect: false, note: "shoe sizes are not ages and never answer one" },
+  { sizes: "25-30", query: "נעליים מידה 2", expect: false, note: "nor is a combined shoe band" },
+  { sizes: "OS", query: "כובע מידה 2", expect: true, note: "unreadable sizing is not a reason to hide stock" },
+];
+for (const c of SIZE_CASES) {
+  const requested = parseRequestedSize(c.query);
+  const got = requested !== null && productHasSize(c.sizes, requested);
+  check(got === c.expect, `[size] ${c.note} -- "${c.query}" vs ${c.sizes}`, got, c.expect);
 }
 
 // --- price / availability history -----------------------------------
@@ -314,6 +350,7 @@ const total =
   AMBIGUOUS_COLOR_CASES.length +
   HISTORY_CASES.length +
   STATUS_CASES.length +
+  SIZE_CASES.length +
   4;
 if (failures > 0) {
   console.error(`\n${failures}/${total} regression cases FAILED.`);

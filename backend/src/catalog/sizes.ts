@@ -40,11 +40,20 @@ export function parseSizeLabel(raw: string): MonthRange | null {
     if (from >= 1 && to <= 14 && to - from <= 2) return { min: from * YEAR, max: (to + 1) * YEAR };
   }
 
-  // "18-24m", "0-3", "3-6"
+  // "18-24m", "0-3", "3-6". The upper number is a month the garment still
+  // fits, not the month it stops fitting: a baby of exactly 24 months
+  // wears 18-24m, which is why the store prints 24 on the label. Treating
+  // it as exclusive made every month range fall one month short of the
+  // next rung up, so a skirt stocked NB..18-24m never answered a search
+  // for "מידה 2" (24-36m), and a 0-3m bodysuit never answered "3 חודשים"
+  // -- reported from the live site, and true of every month range in
+  // every store's catalogue, not just these. The years ladder above
+  // already reads its upper bound inclusively (4-5 covers all of age 5);
+  // this brings months into line with it.
   const range = label.match(/^(\d+)-(\d+)\s*(m|מ|ח)?$/);
   if (range) {
     const [, from, to] = range;
-    return { min: Number(from), max: Number(to) };
+    return { min: Number(from), max: Number(to) + 1 };
   }
 
   // "3m", "24m"
