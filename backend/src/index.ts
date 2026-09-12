@@ -38,6 +38,17 @@ async function main() {
     console.log(`[boot] LLM matching: ${env.llmEnabled ? `on (${env.openRouterModel})` : "off (keyword fallback)"}`);
   });
 
+  // Search results are cached in the database, so they outlive the
+  // process -- which means a deploy that changes how search works keeps
+  // serving answers computed by the old code until the TTL runs out.
+  // That is how a fix for a size-filter bug (products wrongly deleted
+  // from results) stayed invisible in production after it shipped. A
+  // build boots with an empty cache; the first search after a deploy
+  // costs one LLM call, which is a fair price for never showing a
+  // shopper a result the current code would not produce.
+  const { count: staleCached } = await prisma.searchCache.deleteMany({});
+  if (staleCached > 0) console.log(`[boot] cleared ${staleCached} cached search(es) from the previous build`);
+
   const productCount = await prisma.product.count();
   if (productCount === 0) {
     console.log("[boot] catalog is empty, running initial ingest in the background (or run `npm run ingest` yourself)...");
