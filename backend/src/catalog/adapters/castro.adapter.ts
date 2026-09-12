@@ -65,8 +65,13 @@ interface SwatchJsonConfig {
 export const castroAdapter: CatalogAdapter = {
   key: "castro",
   name: "קסטרו קידס",
+  nameEn: "Castro Kids",
   baseUrl: BASE_URL,
-  logoUrl: `${BASE_URL}/favicon.ico`,
+  // /favicon.ico does resolve here, but points at the same asset as this
+  // explicit path -- spelled out so it's obvious which real brand mark is
+  // being shown (the round handwritten "Castro" logo) rather than relying
+  // on whatever the default favicon route happens to serve.
+  logoUrl: `${BASE_URL}/pub/media/favicon/websites/1/favicon-castro.png`,
   async fetchCatalog(): Promise<CatalogProduct[]> {
     const byId = new Map<string, CatalogProduct>();
 

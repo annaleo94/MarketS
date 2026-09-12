@@ -20,8 +20,13 @@ const PRODUCT_BLOCK_RE =
 export const cartersAdapter: CatalogAdapter = {
   key: "carters",
   name: "קרטרס",
+  nameEn: "Carter's",
   baseUrl: BASE_URL,
-  logoUrl: `${BASE_URL}/favicon.ico`,
+  // /favicon.ico 404s (verified live -- Magento serves an error page at
+  // that path here, not an icon). The actual favicon Magento is
+  // configured with lives under /media/favicon and does resolve: a small
+  // blue "C" mark, the real brand mark rather than a generic icon.
+  logoUrl: `${BASE_URL}/media/favicon/stores/1/Untitled.jpg`,
   async fetchCatalog(): Promise<CatalogProduct[]> {
     const byId = new Map<string, CatalogProduct>();
 

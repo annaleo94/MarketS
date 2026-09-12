@@ -38,8 +38,23 @@ export async function runIngest(adapters: CatalogAdapter[] = catalogAdapters): P
   for (const adapter of adapters) {
     const store = await prisma.store.upsert({
       where: { key: adapter.key },
-      update: { name: adapter.name, baseUrl: adapter.baseUrl, logoUrl: adapter.logoUrl, isLive: true, active: true },
-      create: { key: adapter.key, name: adapter.name, baseUrl: adapter.baseUrl, logoUrl: adapter.logoUrl, isLive: true, active: true },
+      update: {
+        name: adapter.name,
+        nameEn: adapter.nameEn,
+        baseUrl: adapter.baseUrl,
+        logoUrl: adapter.logoUrl,
+        isLive: true,
+        active: true,
+      },
+      create: {
+        key: adapter.key,
+        name: adapter.name,
+        nameEn: adapter.nameEn,
+        baseUrl: adapter.baseUrl,
+        logoUrl: adapter.logoUrl,
+        isLive: true,
+        active: true,
+      },
     });
 
     console.log(`[ingest] fetching ${adapter.name} (${adapter.key})...`);

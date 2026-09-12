@@ -17,6 +17,12 @@ model Store {
   id        String    @id @default(cuid())
   key       String    @unique // matches the adapter's `key`, e.g. "fox", "shilav"
   name      String
+  // The store's own brand name in Latin lettering, shown next to `name`
+  // so the store is recognisable by its actual branding, not just our
+  // Hebrew rendering of it. Nullable only because a row from before this
+  // field existed could in principle lack it; every adapter always sets
+  // it, so `ingest` fills it in on the very next sync.
+  nameEn    String?
   baseUrl   String
   logoUrl   String?
   isLive    Boolean   @default(true) // true = real store data, false = demo/mock data

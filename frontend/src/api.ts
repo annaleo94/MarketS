@@ -36,7 +36,7 @@ export interface SearchResultItem {
 }
 
 export interface StoreResults {
-  store: { key: string; name: string; baseUrl: string; logoUrl: string | null };
+  store: { key: string; name: string; nameEn: string | null; baseUrl: string; logoUrl: string | null };
   count: number;
   items: SearchResultItem[];
 }

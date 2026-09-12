@@ -5,8 +5,12 @@ import { createShopifyAdapter } from "./shopify.factory";
 export const shilavAdapter = createShopifyAdapter({
   key: "shilav",
   name: "שילב",
+  nameEn: "Shilav",
   baseUrl: "https://www.shilav.co.il",
-  logoUrl: "https://www.shilav.co.il/favicon.ico",
+  // /favicon.ico 404s (verified live). The real brand mark is the PNG
+  // logo the storefront's own header renders -- the "שילב · BORN TO LOVE"
+  // badge, not a generic icon.
+  logoUrl: "https://www.shilav.co.il/cdn/shop/files/SHILAV-1.png?v=1724591056&width=200",
   collectionHandles: ["fashion-clothing"],
   category: "בגדי תינוקות וילדים",
 });

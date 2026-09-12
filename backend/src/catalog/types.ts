@@ -24,6 +24,11 @@ export interface CatalogProduct {
 export interface CatalogAdapter {
   key: string; // stable id, also used as Store.key in the DB
   name: string;
+  // The store's own brand name in English -- shown next to the Hebrew
+  // name so a shopper recognises the store by its actual branding, not
+  // just our translation of it (Latin lettering also reads faster at a
+  // glance for a brand you already know, which is the point).
+  nameEn: string;
   baseUrl: string;
   logoUrl?: string;
   fetchCatalog(): Promise<CatalogProduct[]>;

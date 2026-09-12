@@ -53,7 +53,7 @@ export interface LiveProduct {
   colors: string[];
   gender: string;
   delisted: boolean;
-  store: { key: string; name: string; baseUrl: string; logoUrl: string | null };
+  store: { key: string; name: string; nameEn: string | null; baseUrl: string; logoUrl: string | null };
 }
 
 const STORAGE_KEY = "markets.saved.v1";

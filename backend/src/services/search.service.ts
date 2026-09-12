@@ -26,7 +26,7 @@ export interface SearchResultItem {
 }
 
 export interface StoreResults {
-  store: { key: string; name: string; baseUrl: string; logoUrl: string | null };
+  store: { key: string; name: string; nameEn: string | null; baseUrl: string; logoUrl: string | null };
   count: number;
   items: SearchResultItem[];
 }
@@ -199,7 +199,7 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
   const storeResults: StoreResults[] = stores.map((store) => {
     const items = (byStore.get(store.id) ?? []).sort(compareForDisplay);
     return {
-      store: { key: store.key, name: store.name, baseUrl: store.baseUrl, logoUrl: store.logoUrl },
+      store: { key: store.key, name: store.name, nameEn: store.nameEn, baseUrl: store.baseUrl, logoUrl: store.logoUrl },
       count: items.length,
       items,
     };

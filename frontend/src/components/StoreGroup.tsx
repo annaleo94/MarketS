@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { StoreResults, matchRank } from "../api";
 import { ProductCard } from "./ProductCard";
+import { StoreBadge } from "./StoreBadge";
 
 const INITIAL_VISIBLE = 6;
 
@@ -13,7 +14,8 @@ export function StoreGroup({ group }: { group: StoreResults }) {
     return (
       <section className="store-group store-group--empty">
         <h2 className="store-group__head">
-          {group.store.name} <span className="store-group__count">לא נמצאו תוצאות</span>
+          <StoreBadge store={group.store} />
+          <span className="store-group__count">לא נמצאו תוצאות</span>
         </h2>
       </section>
     );
@@ -33,7 +35,8 @@ export function StoreGroup({ group }: { group: StoreResults }) {
   return (
     <section className="store-group">
       <h2 className="store-group__head">
-        {group.store.name} <span className="store-group__count">({group.count})</span>
+        <StoreBadge store={group.store} />
+        <span className="store-group__count">({group.count})</span>
       </h2>
 
       <ul className="store-group__items">

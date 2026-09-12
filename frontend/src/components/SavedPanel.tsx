@@ -10,6 +10,7 @@ import {
   LiveProduct,
 } from "../saved";
 import { CompareView } from "./CompareView";
+import { StoreBadge } from "./StoreBadge";
 
 const currencySymbol: Record<string, string> = { ILS: "₪", USD: "$", EUR: "€" };
 
@@ -142,30 +143,38 @@ export function SavedPanel({ open, onClose }: Props) {
                   מהתוצאות.
                 </p>
               ) : (
-                groups.map((group) => (
-                  <section key={group.storeKey} className="saved-store">
-                    <h3 className="saved-store__head">
-                      {group.storeName}
-                      <span className="saved-store__count">{itemCount(group.items.length)}</span>
-                    </h3>
-                    <ul className="saved-store__items">
-                      {group.items.map((item) => (
-                        <SavedRow
-                          key={item.id}
-                          item={item}
-                          current={live[item.id]}
-                          lists={lists}
-                          selected={selected.includes(item.id)}
-                          selectable={selected.includes(item.id) || selected.length < MAX_COMPARE}
-                          onSelect={() => toggleSelected(item.id)}
-                          onRemove={() => remove(item.id)}
-                          onMove={(name) => moveToList(item.id, name)}
-                          onNewList={() => setNewListFor(item.id)}
-                        />
-                      ))}
-                    </ul>
-                  </section>
-                ))
+                groups.map((group) => {
+                  // Prefer the live catalogue's own record of the store
+                  // (fresher, and carries the logo/English name) -- the
+                  // Hebrew name each item stored at save-time is only the
+                  // fallback for while that hasn't loaded yet or is
+                  // unreachable.
+                  const liveStore = live[group.items[0]?.id]?.store;
+                  return (
+                    <section key={group.storeKey} className="saved-store">
+                      <h3 className="saved-store__head">
+                        <StoreBadge store={liveStore ?? { name: group.storeName }} size="sm" />
+                        <span className="saved-store__count">{itemCount(group.items.length)}</span>
+                      </h3>
+                      <ul className="saved-store__items">
+                        {group.items.map((item) => (
+                          <SavedRow
+                            key={item.id}
+                            item={item}
+                            current={live[item.id]}
+                            lists={lists}
+                            selected={selected.includes(item.id)}
+                            selectable={selected.includes(item.id) || selected.length < MAX_COMPARE}
+                            onSelect={() => toggleSelected(item.id)}
+                            onRemove={() => remove(item.id)}
+                            onMove={(name) => moveToList(item.id, name)}
+                            onNewList={() => setNewListFor(item.id)}
+                          />
+                        ))}
+                      </ul>
+                    </section>
+                  );
+                })
               )}
 
               {newListFor && newListFor !== "" && (

@@ -13,6 +13,7 @@ storesRoute.get("/stores", async (_req, res) => {
     stores: stores.map((s) => ({
       key: s.key,
       name: s.name,
+      nameEn: s.nameEn,
       baseUrl: s.baseUrl,
       logoUrl: s.logoUrl,
       isLive: s.isLive,

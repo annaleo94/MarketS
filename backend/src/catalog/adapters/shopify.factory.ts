@@ -35,6 +35,7 @@ interface ShopifyProductsResponse {
 export interface ShopifyStoreConfig {
   key: string;
   name: string;
+  nameEn: string;
   baseUrl: string; // e.g. "https://fox.co.il" -- no trailing slash
   logoUrl?: string;
   // Collection handles to pull, e.g. ["baby", "kids"] -- see each store's
@@ -52,6 +53,7 @@ export function createShopifyAdapter(config: ShopifyStoreConfig): CatalogAdapter
   return {
     key: config.key,
     name: config.name,
+    nameEn: config.nameEn,
     baseUrl: config.baseUrl,
     logoUrl: config.logoUrl,
     async fetchCatalog(): Promise<CatalogProduct[]> {

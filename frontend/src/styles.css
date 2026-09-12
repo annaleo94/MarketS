@@ -249,6 +249,27 @@ body {
 .store-group__head { font-size:1.05rem; font-weight: 700; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
 .store-group__count { font-weight:400; color:var(--muted); font-size:.9rem; }
 .store-group--empty .store-group__head { color:var(--muted); font-weight:500; }
+
+/* --- store badge (logo + Hebrew name + the store's own English brand
+   name) -- used in the results headers above and the saved-list group
+   headers. The logo sits in a fixed, light card so four very different
+   source assets (an SVG wordmark, a wide PNG, a round icon, a tiny
+   favicon) all read as the same size "chip" instead of at their own,
+   wildly different native dimensions. */
+.store-badge { display:inline-flex; align-items:center; gap:8px; min-width:0; }
+.store-badge__logo-frame {
+  flex-shrink:0; width:30px; height:30px; border-radius:8px;
+  background:#fff; border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center; overflow:hidden;
+}
+.store-badge__logo { max-width:80%; max-height:80%; object-fit:contain; }
+.store-badge__names { display:flex; flex-direction:column; line-height:1.15; min-width:0; }
+.store-badge__he { font-weight:700; }
+.store-badge__en {
+  font-size:.72rem; font-weight:500; color:var(--muted); letter-spacing:.02em;
+}
+.store-badge--sm .store-badge__logo-frame { width:24px; height:24px; border-radius:7px; }
+.store-badge--sm .store-badge__en { font-size:.68rem; }
 .store-group__items { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
 .store-group__more { margin-top:8px; background:none; border:none; color:var(--primary-dark);
   cursor:pointer; font-family:inherit; font-size:.88rem; padding:4px 0; font-weight: 600; }
@@ -448,7 +469,7 @@ body {
 
 .saved-store__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   margin: 0 0 8px;

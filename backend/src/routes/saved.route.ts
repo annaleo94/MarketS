@@ -28,7 +28,7 @@ savedRoute.get("/products", async (req, res) => {
 
   const products = await prisma.product.findMany({
     where: { id: { in: ids } },
-    include: { store: { select: { key: true, name: true, baseUrl: true, logoUrl: true } } },
+    include: { store: { select: { key: true, name: true, nameEn: true, baseUrl: true, logoUrl: true } } },
   });
 
   res.json({
