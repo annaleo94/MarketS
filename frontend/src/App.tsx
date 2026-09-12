@@ -4,39 +4,25 @@ import { Results } from "./components/Results";
 import { SavedButton } from "./components/SavedButton";
 import { SavedPanel } from "./components/SavedPanel";
 import { SavedProvider } from "./saved";
-import { searchProducts, SearchResponse, AppliedFilter } from "./api";
+import { searchProducts, SearchResponse } from "./api";
 
 export default function App() {
   const [data, setData] = useState<SearchResponse | null>(null);
-  const [query, setQuery] = useState("");
-  const [dropped, setDropped] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedOpen, setSavedOpen] = useState(false);
 
-  async function run(q: string, drop: string[]) {
+  async function run(q: string) {
     setLoading(true);
     setError(null);
     try {
-      setData(await searchProducts(q, drop));
+      setData(await searchProducts(q));
     } catch (err) {
       setError(err instanceof Error ? err.message : "משהו השתבש");
       setData(null);
     } finally {
       setLoading(false);
     }
-  }
-
-  function handleSearch(q: string) {
-    setQuery(q);
-    setDropped([]);
-    run(q, []);
-  }
-
-  function handleDropFilter(kind: AppliedFilter["kind"]) {
-    const next = [...dropped, kind];
-    setDropped(next);
-    run(query, next);
   }
 
   return (
@@ -56,12 +42,12 @@ export default function App() {
       </header>
 
       <div className="page">
-        <SearchBar onSearch={handleSearch} loading={loading} />
+        <SearchBar onSearch={run} loading={loading} />
 
         <main>
           {error && <div className="error-state">שגיאה: {error}</div>}
           {!error && loading && <div className="loading-state">מחפש בכל החנויות...</div>}
-          {!error && !loading && data && <Results data={data} onDropFilter={handleDropFilter} />}
+          {!error && !loading && data && <Results data={data} />}
           {!error && !loading && !data && (
             <div className="intro">
               <p>תארו למעלה את הפריט שאתם מחפשים כדי להתחיל — למשל "בגד ים מידה שנתיים".</p>

@@ -16,15 +16,12 @@ export function ProductCard({
   item,
   isCheapest,
   store,
-  showStore = false,
 }: {
   item: SearchResultItem;
   isCheapest: boolean;
+  // Not shown on the card -- every card sits under its store's heading --
+  // but an item has to remember where it came from to be saved.
   store: CardStore;
-  // Only in the merged "compare by price" list, where the cards aren't
-  // under a store heading -- a price with no shop attached to it can't be
-  // compared against anything.
-  showStore?: boolean;
 }) {
   const symbol = currencySymbol[item.currency] ?? item.currency;
 
@@ -40,12 +37,7 @@ export function ProductCard({
 
       <div className="product__body">
         <div className="product__title">{item.title}</div>
-        {(showStore || item.sizes) && (
-          <div className="product__meta">
-            {showStore && <span className="product__store">{store.name}</span>}
-            {item.sizes && item.sizes.split(",").join(" · ")}
-          </div>
-        )}
+        {item.sizes && <div className="product__meta">{item.sizes.split(",").join(" · ")}</div>}
       </div>
 
       <div className="product__buy">

@@ -1,63 +1,29 @@
-import { useState } from "react";
-import { SearchResponse, AppliedFilter, compareForDisplay, matchRank } from "../api";
+import { SearchResponse } from "../api";
 import { StoreGroup } from "./StoreGroup";
-import { ProductCard } from "./ProductCard";
 
 interface Props {
   data: SearchResponse;
-  onDropFilter: (kind: AppliedFilter["kind"]) => void;
 }
 
-export function Results({ data, onDropFilter }: Props) {
-  const [flat, setFlat] = useState(false);
-
-  const allItems = data.stores.flatMap((s) => s.items);
-
-  // Which store each item came from. The grouped view gets this from its
-  // heading; the merged "compare by price" view has no heading at all, so
-  // without this its cards -- and anything saved from them -- would carry
-  // a price with no shop attached.
-  const storeOf = new Map(data.stores.flatMap((s) => s.items.map((i) => [i.id, s.store])));
-
-  // "Cheapest" has to mean cheapest among the items that actually answer the
-  // request. Items whose colour or leg style we never resolved are excluded
-  // too: they sort below the confirmed matches, so the cheapest of them is
-  // typically collapsed behind "הצג עוד" and the badge would be attached to
-  // a card nobody can see -- which is how a search for a white shirt ended
-  // up showing no "הכי זול" at all, its ₪19.9 winner being a shirt of
-  // unknown colour sitting out of view.
-  // Narrowed to the best combined tier actually present, not just to "not
-  // wrong": every store lists that tier first, so whichever item wins the
-  // badge is certain to be on screen rather than collapsed behind "הצג עוד".
-  const bestRank = allItems.length > 0 ? Math.min(...allItems.map(matchRank)) : null;
-  const priced = allItems.filter((i) => matchRank(i) === bestRank);
-  const cheapestOverall = priced.length > 0 ? Math.min(...priced.map((i) => i.price)) : null;
-
+// Results, grouped by store, cheapest first within each one. Two things
+// deliberately absent:
+//
+// The "סוננו לפי" chips. How the query was parsed -- category, size,
+// gender -- is our working, not the shopper's business; someone who typed
+// "מכנס קצר ורוד" already knows what they asked for, and seeing it
+// restated as machine-looking tags invites doubt about whether we
+// understood rather than confidence that we did.
+//
+// The "השוואה לפי מחיר" toggle. Every store's list is already ordered
+// cheapest to priciest, so the toggle offered a different arrangement of
+// the same order -- a choice that costs a decision and changes nothing.
+export function Results({ data }: Props) {
   return (
     <div className="results">
-      {data.filters.length > 0 && (
-        <div className="filters">
-          <span className="filters__label">סוננו לפי:</span>
-          {data.filters.map((filter) => (
-            <button
-              key={filter.kind}
-              className="chip"
-              onClick={() => onDropFilter(filter.kind)}
-              title="הסרת הסינון"
-            >
-              {filter.label} <span className="chip__x">✕</span>
-            </button>
-          ))}
-        </div>
-      )}
-
       <div className="results__bar">
         <span>
           {data.totalCount} תוצאות עבור "{data.query}"
         </span>
-        <button className="results__toggle" onClick={() => setFlat(!flat)}>
-          {flat ? "קיבוץ לפי חנות" : "השוואה לפי מחיר"}
-        </button>
       </div>
 
       {data.showingAlternatives && data.totalCount > 0 && (
@@ -68,27 +34,14 @@ export function Results({ data, onDropFilter }: Props) {
 
       {data.totalCount === 0 && (
         <p className="empty-state">
-          לא נמצאו פריטים שעונים על כל התנאים. אפשר להסיר סינון למעלה כדי להרחיב את החיפוש.
+          לא נמצאו פריטים שמתאימים לחיפוש. אפשר לנסות ניסוח אחר, או לוותר על אחד הפרטים — למשל הצבע או
+          המידה.
         </p>
       )}
 
-      {flat ? (
-        <ul className="store-group__items">
-          {[...allItems]
-            .sort(compareForDisplay)
-            .map((item) => (
-              <ProductCard
-                key={item.id}
-                item={item}
-                store={storeOf.get(item.id)!}
-                showStore
-                isCheapest={item.price === cheapestOverall}
-              />
-            ))}
-        </ul>
-      ) : (
-        data.stores.map((group) => <StoreGroup key={group.store.key} group={group} />)
-      )}
+      {data.stores.map((group) => (
+        <StoreGroup key={group.store.key} group={group} />
+      ))}
     </div>
   );
 }
