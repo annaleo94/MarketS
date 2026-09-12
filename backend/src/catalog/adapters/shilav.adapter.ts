@@ -11,6 +11,6 @@ export const shilavAdapter = createShopifyAdapter({
   // logo the storefront's own header renders -- the "שילב · BORN TO LOVE"
   // badge, not a generic icon.
   logoUrl: "https://www.shilav.co.il/cdn/shop/files/SHILAV-1.png?v=1724591056&width=200",
-  collectionHandles: ["fashion-clothing"],
+  collections: [{ handle: "fashion-clothing" }],
   category: "בגדי תינוקות וילדים",
 });

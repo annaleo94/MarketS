@@ -143,7 +143,9 @@ async function runSearch(rawQuery: string, normalizedQuery: string, parsed: Pars
     },
   });
 
-  const sizeFiltered = parsed.size ? candidates.filter((p) => productHasSize(p.sizes, parsed.size!)) : candidates;
+  const sizeFiltered = parsed.size
+    ? candidates.filter((p) => productHasSize(p.sizes, parsed.size!, p.categorySlug))
+    : candidates;
 
   // --- Soft signals. These only order what survived above.
   const scored = sizeFiltered

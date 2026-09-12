@@ -21,6 +21,7 @@ import { categoryFromText, legStyleFromText } from "./taxonomy";
 import { suppressAmbiguousWhiteForGirls } from "../search/parse-query";
 import { diffProduct, diffDelisted, StoredProduct } from "./history";
 import { productHasSize, parseRequestedSize } from "./sizes";
+import { isAllowedByRules, parseRobotsTxt } from "./robots";
 
 interface CategoryCase {
   title: string;
@@ -44,6 +45,29 @@ const CATEGORY_CASES: CategoryCase[] = [
   { title: "וסט פסים", storeCategory: "חולצות", expect: "outerwear", note: "vest leaking into shirt search" },
   { title: "קרדיגן קרושה", storeCategory: "חולצות", expect: "outerwear", note: "cardigan leaking into shirt search" },
   { title: "חולצת טריקו כחולה", storeCategory: "חולצות", expect: "tops", note: "real shirt unaffected by the outerwear override" },
+
+  // --- Footwear: two stores whose every page hint is a bare "נעליים" ---
+  // The shoe stores label whole category pages generically (and the "צעד
+  // ראשון" stage pages genuinely say nothing more), so if the coarse store
+  // hint won, all several thousand of their products would share one
+  // bucket and the footwear split would be decorative.
+  { title: "סנדל בייבי בנים", storeCategory: "נעליים", expect: "sandals", note: "title refines the store's generic footwear bucket" },
+  { title: "מגפי גשם דמויות", storeCategory: "נעליים", expect: "rain-boots", note: "the two-word alias beats the bare מגף" },
+  { title: "נעלי בית פרווה", storeCategory: "נעליים", expect: "slippers", note: "slippers are not sneakers" },
+  { title: "נעלי ספורט אלפנטן", storeCategory: "נעליים", expect: "sneakers", note: "real Nimrod title" },
+  { title: "נעליים שחורות", storeCategory: "נעליים", expect: "shoes", note: "a title that names no kind stays in the parent, it isn't forced into one" },
+  {
+    title: "סנדל בנות",
+    storeCategory: "סנדלים",
+    expect: "sandals",
+    note: "a store hint that IS specific is simply agreed with",
+  },
+  {
+    title: "מכנסי ג'ינס כחולים",
+    storeCategory: "מכנסיים",
+    expect: "bottoms",
+    note: "the footwear rule must stay footwear-only -- clothing keeps the store's generic bucket (see the case below it)",
+  },
 
   // --- The regression the broader "any family wins" rule would have caused ---
   {
@@ -155,7 +179,7 @@ for (const c of AMBIGUOUS_COLOR_CASES) {
 // between a shopper seeing a garment and never knowing it existed.
 // The first case is a real report from the live site -- a Shilav skirt
 // stocked up to 18-24m that never appeared in a search for מידה 2.
-const SIZE_CASES: { sizes: string; query: string; expect: boolean; note: string }[] = [
+const SIZE_CASES: { sizes: string; query: string; expect: boolean; note: string; category?: string }[] = [
   {
     sizes: "NB,0-3m,3-6m,6-12m,12-18m,18-24m",
     query: "חצאית מידה 2",
@@ -185,11 +209,129 @@ const SIZE_CASES: { sizes: string; query: string; expect: boolean; note: string 
   },
   { sizes: "N.B", query: "בגד גוף מידה 2", expect: false, note: "Fox writes newborn with a dot; it is still newborn" },
   { sizes: "N.B,SNB", query: "בגד גוף 1 חודש", expect: true, note: "and it still answers the age it is for" },
+
+  // Footwear sized below EU 22. Unreadable as text -- "20" is a real baby
+  // shoe size and nothing at all on the age scale -- so the product's own
+  // category is what settles it. Without this they fall through every rule
+  // in parseSizeLabel, come out as "we can't tell", and a product we can't
+  // tell about matches EVERY age: a pair of size 17-21 booties would answer
+  // a search for a two-year-old's pyjamas.
+  {
+    sizes: "17,18,19,20,21",
+    query: "נעליים מידה 2",
+    expect: false,
+    category: "sandals",
+    note: "EU 17-21 baby shoe sizes are still shoe sizes, even though no label rule can see it",
+  },
+  {
+    sizes: "17,18,19,20,21",
+    query: "פיג'מה מידה 2",
+    expect: false,
+    category: "shoes",
+    note: "and they must not leak into a search for something else entirely",
+  },
+  {
+    sizes: "",
+    query: "מגפיים מידה 3",
+    expect: false,
+    category: "boots",
+    note: "footwear with no size list at all still can't answer an age",
+  },
+  {
+    sizes: "2Y,3Y",
+    query: "חולצה מידה 2",
+    expect: true,
+    category: "tops",
+    note: "a category outside the footwear branch changes nothing about the age scale",
+  },
 ];
 for (const c of SIZE_CASES) {
   const requested = parseRequestedSize(c.query);
-  const got = requested !== null && productHasSize(c.sizes, requested);
+  const got = requested !== null && productHasSize(c.sizes, requested, c.category);
   check(got === c.expect, `[size] ${c.note} -- "${c.query}" vs ${c.sizes}`, got, c.expect);
+}
+
+// --- robots.txt ------------------------------------------------------
+// Each store's real robots.txt, trimmed to the rules that decide whether
+// the URLs its adapter actually fetches are ours to read. This used to do
+// plain prefix matching on the path, which matched none of these rules --
+// every Shopify rule begins with a wildcard, and Papaya's `/*?` is a
+// wildcard covering the query string the matcher never even looked at. So
+// the file was fetched, parsed, and then effectively ignored. These cases
+// exist so that can't quietly come back.
+const SHOPIFY_ROBOTS = `User-agent: *
+Disallow: /*/account
+Disallow: /*?*oseid=*
+Disallow: /collections/*sort_by*
+Disallow: /collections/*filter*&*filter*
+Disallow: /checkout
+Allow: /collections/checkout
+`;
+
+// Magento's stock robots.txt, which is what Papaya serves. `/*?` disallows
+// every URL carrying a query string -- and this theme pages with `?p=2`,
+// which is why that adapter reads page 1 of each category and no further.
+const PAPAYA_ROBOTS = `User-agent: *
+Disallow: /index.php/
+Disallow: /*?
+Disallow: /checkout/
+Disallow: /catalog/
+`;
+
+// Castro's, by contrast, opens the whole site up and names one exception,
+// so paging through its categories is fine.
+const CASTRO_ROBOTS = `User-agent: *
+Allow: /
+Disallow: /catalogsearch/result/?q=
+`;
+
+const ROBOTS_CASES: { robots: string; url: string; expect: boolean; note: string }[] = [
+  {
+    robots: SHOPIFY_ROBOTS,
+    url: "https://www.nimrod.co.il/collections/baby/products.json?limit=250&page=1",
+    expect: true,
+    note: "the collection JSON every Shopify adapter reads is allowed -- a false negative here silently empties three stores",
+  },
+  {
+    robots: SHOPIFY_ROBOTS,
+    url: "https://fox.co.il/collections/baby?sort_by=price",
+    expect: false,
+    note: "a wildcard in the middle of a rule still has to match",
+  },
+  {
+    robots: SHOPIFY_ROBOTS,
+    url: "https://fox.co.il/collections/checkout",
+    expect: true,
+    note: "Allow beats a shorter Disallow at the same URL",
+  },
+  {
+    robots: PAPAYA_ROBOTS,
+    url: "https://www.papaya.co.il/בנות/סנדלים",
+    expect: true,
+    note: "a category page with no query string is ours to read",
+  },
+  {
+    robots: PAPAYA_ROBOTS,
+    url: "https://www.papaya.co.il/בנות/סנדלים?p=2",
+    expect: false,
+    note: "`/*?` covers the query string, so page 2 of a category is not -- this is why that adapter doesn't paginate",
+  },
+  {
+    robots: CASTRO_ROBOTS,
+    url: "https://www.castro.com/ילדים/מכנסיים?p=4",
+    expect: true,
+    note: "and a store that allows everything is still allowed to be paginated",
+  },
+  {
+    robots: "",
+    url: "https://www.cartersoshkosh.co.il/תינוקות",
+    expect: true,
+    note: "no robots.txt at all fails open",
+  },
+];
+for (const c of ROBOTS_CASES) {
+  const got = isAllowedByRules(parseRobotsTxt(c.robots), c.url);
+  check(got === c.expect, `[robots] ${c.note} -- ${decodeURIComponent(c.url)}`, got, c.expect);
 }
 
 // --- price / availability history -----------------------------------
@@ -359,6 +501,7 @@ const total =
   HISTORY_CASES.length +
   STATUS_CASES.length +
   SIZE_CASES.length +
+  ROBOTS_CASES.length +
   4;
 if (failures > 0) {
   console.error(`\n${failures}/${total} regression cases FAILED.`);

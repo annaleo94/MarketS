@@ -37,7 +37,9 @@ export default function App() {
         <div className="hero__inner">
           <h1>MarketS</h1>
           <p className="tagline">גדלים מהר, קונים חכם</p>
-          <p className="subtagline">משווים מחירים בפוקס, שילב, קרטרס וקסטרו קידס — במקום אחד</p>
+          <p className="subtagline">
+            משווים מחירים בפוקס, שילב, קרטרס, קסטרו קידס, נעלי נמרוד ופפאיה — ביגוד והנעלה במקום אחד
+          </p>
         </div>
       </header>
 

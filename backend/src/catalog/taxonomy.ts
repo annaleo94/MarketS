@@ -89,8 +89,35 @@ export const CATEGORIES: CategoryNode[] = [
   { slug: "outerwear", label: "מעילים וסריגים", aliases: ["מעיל", "פוטר", "קפוצון", "סריג", "קרדיגן", "ג'קט", "אפודה", "אפודת", "וסט"] },
   { slug: "sleepwear", label: "ביגוד שינה", aliases: ["פיג'מה", "פיגמה", "פיג'מת", "פיגמת", "ביגוד שינה", "שק שינה", "אוברול שינה"] },
 
+  // --- footwear ---
+  // Split the same way, and for the same reason, as accessories below: this
+  // was one flat node carrying every one of the child aliases directly, so
+  // a search for sandals also returned boots, slippers and trainers. That
+  // was tolerable while footwear was a handful of cross-merchandised items
+  // on Castro's clothing pages; it stopped being tolerable when נעלי נמרוד
+  // and פפאיה joined, since between them they are several thousand
+  // products that are *all* shoes and would otherwise share a single
+  // bucket. The parent keeps only the generic words, so "נעליים" still
+  // finds everything here.
+  { slug: "shoes", label: "הנעלה", aliases: ["נעל", "נעלי", "נעליים", "הנעלה"] },
+  {
+    slug: "sneakers",
+    label: "נעלי ספורט וסניקרס",
+    parent: "shoes",
+    aliases: ["סניקרס", "נעלי ספורט", "נעל ספורט", "קטרגל", "קט רגל"],
+  },
+  { slug: "sandals", label: "סנדלים", parent: "shoes", aliases: ["סנדל", "סנדלים"] },
+  { slug: "flip-flops", label: "כפכפים", parent: "shoes", aliases: ["כפכף", "כפכפים", "כפכפי"] },
+  { slug: "boots", label: "מגפיים ומגפונים", parent: "shoes", aliases: ["מגף", "מגפיים", "מגפון", "מגפונים"] },
+  // Rain boots sit under boots rather than beside them: they are boots, so
+  // a "מגפיים" search should still find them, but "מגפי גשם" is a specific
+  // enough request to deserve its own answer. The two-word alias is longer
+  // than the bare "מגף"/"מגפיים", so it wins the longest-alias rule below.
+  { slug: "rain-boots", label: "מגפי גשם", parent: "boots", aliases: ["מגף גשם", "מגפי גשם"] },
+  { slug: "slippers", label: "נעלי בית", parent: "shoes", aliases: ["נעלי בית", "נעל בית"] },
+  { slug: "ballet-flats", label: "נעלי בובה", parent: "shoes", aliases: ["נעלי בובה", "נעל בובה"] },
+
   // --- extras ---
-  { slug: "shoes", label: "הנעלה", aliases: ["נעל", "נעלי", "סנדל", "מגף", "כפכף"] },
 
   // Same shape as swimwear and bottoms above: one parent so a generic
   // "אביזרים" still finds all of these, and one child per kind so each is

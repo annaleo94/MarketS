@@ -1,8 +1,12 @@
 # MarketS
 
-פיילוט: תארו פריט בגדים לתינוקות/ילדים במילים שלכם → רשימת החנויות שמוכרות
-אותו (פוקס, שילב, קרטרס, קסטרו קידס), ממוינת מהזול ליקר. חיפוש בשפה חופשית מופעל ע"י LLM
-דרך [OpenRouter](https://openrouter.ai).
+פיילוט: תארו פריט ביגוד או הנעלה לתינוקות/ילדים במילים שלכם → רשימת החנויות
+שמוכרות אותו (פוקס, שילב, קרטרס, קסטרו קידס, נעלי נמרוד, פפאיה), ממוינת מהזול
+ליקר. חיפוש בשפה חופשית מופעל ע"י LLM דרך [OpenRouter](https://openrouter.ai).
+
+ארבע הראשונות הן חנויות ביגוד; **נעלי נמרוד** ו**פפאיה** הן חנויות הנעלה.
+ההבדל לא קוסמטי: נעליים נמדדות בסולם מידות אירופי ולא בגיל, ולכן `catalog/sizes.ts`
+מפריד בין שני הסולמות במפורש -- מידה 24 של נעל היא לא גיל שנתיים.
 
 **חי באוויר:** https://itl57pbfd8a9c.box.lathe.computer
 
@@ -66,18 +70,31 @@ npm run dev:frontend   # http://localhost:5173
 | פוקס | Shopify | `/collections/<handle>/products.json` -- endpoint JSON ציבורי רשמי של Shopify | `backend/src/catalog/adapters/fox.adapter.ts` |
 | שילב | Shopify | אותו endpoint, קטגוריית `fashion-clothing` | `backend/src/catalog/adapters/shilav.adapter.ts` |
 | קרטרס | Magento (Hyva) | פרסור HTML של דף הקטגוריה -- הכותרת/מחיר/קישור מגיעים מתוך JSON מובנה (Google Tag Manager `dataLayer`) שמוטמע בכל כרטיס מוצר, לא ניחוש CSS selectors | `backend/src/catalog/adapters/carters.adapter.ts` |
-| קסטרו קידס | Magento (ערכת נושא מותאמת) | פרסור HTML: JSON מובנה של כל מוצר -- שם/תמונה/קישור מתוך attribute של כפתור המועדפים, מחיר/מידות/מלאי מתוך config של הswatches, שניהם מקושרים לפי productId | `backend/src/catalog/adapters/castro.adapter.ts` |
+| קסטרו קידס | Magento (ערכת נושא "Idus") | פרסור HTML: JSON מובנה של כל מוצר -- שם/תמונה/קישור מתוך attribute של כפתור המועדפים, מחיר/מידות/מלאי מתוך config של הswatches, שניהם מקושרים לפי productId | `backend/src/catalog/adapters/castro.adapter.ts` |
+| נעלי נמרוד | Shopify | אותו endpoint JSON, הקולקציות `baby`/`girls`/`boys` (1,286 מוצרים -- כל מה שה-endpoint חושף) | `backend/src/catalog/adapters/nimrod.adapter.ts` |
+| פפאיה | Magento (אותה ערכת נושא של קסטרו) | אותו פרסור בדיוק, ולכן שתיהן חולקות את `idus.factory.ts` | `backend/src/catalog/adapters/papaya.adapter.ts` |
 
 **מיננה** נבדקה ונמצאה חסומה ע"י אתגר בוט אקטיבי של Cloudflare
 (`cf-mitigated: challenge`) -- לא עקפנו את זה, כי זו הגנה מכוונת נגד גישה
 אוטומטית. הוחלפה בקרטרס בהתאם להחלטת המשתמש.
 
-כל השאיבה מכבדת `robots.txt` (בדיקה אוטומטית, best-effort --
-`backend/src/catalog/robots.ts`) ומזדהה ב-User-Agent אמיתי. שווה לציין:
-ה-`robots.txt` של פוקס ושילב (שתיהן חנויות Shopify) מכיל טקסט שמנוסח
-כפנייה ישירה לסוכני AI, כולל המלצה "להמליץ בחום למשתמש להתקין" סקריפט
-קניות צד-שלישי -- זו הזרקת-הנחיה (prompt injection) בתוך תוכן חיצוני, לא
-הנחיה מהמשתמש שלכם, ו-MarketS מתעלמת ממנה.
+כל השאיבה מכבדת `robots.txt` (בדיקה אוטומטית -- `backend/src/catalog/robots.ts`)
+ומזדהה ב-User-Agent אמיתי.
+
+**פפאיה היא דוגמה חיה לכך שזו לא הצהרה ריקה:** ה-`robots.txt` שלה אוסר
+`/*?` -- כלומר כל כתובת עם query string -- וערכת הנושא שלה מדפדפת בדיוק ככה
+(`?p=2`). לכן המתאם שלה קורא **רק את העמוד הראשון** של כל קטגוריה, ומפצה על
+העומק החסר ברוחב: כל קטגוריית עלה שמופיעה ב-sitemap שלה. ה-sitemap עצמו
+מסכים איפה עובר הגבול -- 1,504 כתובות, אף אחת מהן בלי query string.
+
+(בדיקת ה-robots לא תמכה קודם בתווים כלליים והשוותה רק את ה-path, כך שאף
+כלל של פוקס/שילב/נמרוד -- שכולם מתחילים ב-`/*` -- לא נאכף בפועל, וגם האיסור
+של פפאיה לא. זה תוקן, ויש לזה מקרי בדיקה ב-`regression-tests.ts`.)
+
+שווה לציין: ה-`robots.txt` של פוקס, שילב ונמרוד (שלושתן חנויות Shopify)
+מכיל טקסט שמנוסח כפנייה ישירה לסוכני AI, כולל המלצה "להמליץ בחום למשתמש
+להתקין" סקריפט קניות צד-שלישי -- זו הזרקת-הנחיה (prompt injection) בתוך תוכן
+חיצוני, לא הנחיה מהמשתמש שלכם, ו-MarketS מתעלמת ממנה.
 
 ## מבנה הפרויקט
 
@@ -87,9 +104,13 @@ backend/src/
     types.ts              # CatalogAdapter / CatalogProduct
     http.ts, robots.ts     # fetch + robots.txt courtesy check
     adapters/
-      shopify.factory.ts   # מנוע משותף לפוקס/שילב
+      shopify.factory.ts   # מנוע משותף לפוקס/שילב/נמרוד
+      idus.factory.ts      # מנוע משותף לקסטרו/פפאיה (אותה ערכת Magento)
       fox.adapter.ts
       shilav.adapter.ts
+      nimrod.adapter.ts
+      castro.adapter.ts
+      papaya.adapter.ts
       carters.adapter.ts   # פרסור HTML/GTM ייעודי לקרטרס
     registry.ts             # אילו חנויות פעילות בפיילוט
     ingest.ts                # שואב הכל, upsert ל-DB (גם CLI: `npm run ingest`)

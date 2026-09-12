@@ -15,6 +15,6 @@ export const foxAdapter = createShopifyAdapter({
   // resolve on its own (a red "FOX" logotype, not a generic icon).
   logoUrl:
     "https://fox.co.il/cdn/shop/files/66f09c4a7a05e4ac1fcc302c485d4eb1_5ff8c165-c1c2-4740-9594-fb05002bc536.svg",
-  collectionHandles: ["baby", "kids"],
+  collections: [{ handle: "baby" }, { handle: "kids" }],
   category: "בגדי תינוקות וילדים",
 });

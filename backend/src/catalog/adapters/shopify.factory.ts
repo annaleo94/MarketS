@@ -32,15 +32,23 @@ interface ShopifyProductsResponse {
   products: ShopifyProduct[];
 }
 
+export interface ShopifyCollection {
+  handle: string; // see each store's /collections.json for the full list
+  // Gender the collection itself stands for, for stores that split their
+  // catalogue that way (Nimrod's /collections/girls and /collections/boys).
+  // Passed through as the product's storeGender exactly like a per-product
+  // field would be -- it is a page-level fact, but for a collection whose
+  // whole purpose is naming one audience it's as reliable as one.
+  storeGender?: string;
+}
+
 export interface ShopifyStoreConfig {
   key: string;
   name: string;
   nameEn: string;
   baseUrl: string; // e.g. "https://fox.co.il" -- no trailing slash
   logoUrl?: string;
-  // Collection handles to pull, e.g. ["baby", "kids"] -- see each store's
-  // /collections.json for the full list of handles.
-  collectionHandles: string[];
+  collections: ShopifyCollection[];
   category: string; // label stored on Product.category
 }
 
@@ -59,7 +67,8 @@ export function createShopifyAdapter(config: ShopifyStoreConfig): CatalogAdapter
     async fetchCatalog(): Promise<CatalogProduct[]> {
       const byId = new Map<number, CatalogProduct>();
 
-      for (const handle of config.collectionHandles) {
+      for (const collection of config.collections) {
+        const handle = collection.handle;
         let page = 1;
         for (; page <= env.ingestMaxPagesPerSource; page++) {
           const url = `${config.baseUrl}/collections/${handle}/products.json?limit=250&page=${page}`;
@@ -70,7 +79,7 @@ export function createShopifyAdapter(config: ShopifyStoreConfig): CatalogAdapter
           let added = 0;
           for (const p of products) {
             if (byId.has(p.id)) continue;
-            const listing = toCatalogProduct(p, config);
+            const listing = toCatalogProduct(p, config, collection);
             if (listing) {
               byId.set(p.id, listing);
               added++;
@@ -101,7 +110,11 @@ export function createShopifyAdapter(config: ShopifyStoreConfig): CatalogAdapter
   };
 }
 
-function toCatalogProduct(p: ShopifyProduct, config: ShopifyStoreConfig): CatalogProduct | null {
+function toCatalogProduct(
+  p: ShopifyProduct,
+  config: ShopifyStoreConfig,
+  collection: ShopifyCollection
+): CatalogProduct | null {
   const inStockVariants = p.variants.filter((v) => v.available);
   const pricedVariants = (inStockVariants.length > 0 ? inStockVariants : p.variants).filter(
     (v) => Number(v.price) > 0
@@ -131,7 +144,12 @@ function toCatalogProduct(p: ShopifyProduct, config: ShopifyStoreConfig): Catalo
     inStock: inStockVariants.length > 0,
     sizes: p.options?.find((o) => /size|מידה/i.test(o.name))?.values,
     // Fox uses `vendor` for its gender/age segment ("תינוקות בנות");
-    // Shilav uses it for the actual brand, which simply yields no gender.
-    storeGender: p.vendor,
+    // Shilav uses it for the actual brand, which simply yields no gender,
+    // and Nimrod puts its own name there -- useless either way, which is
+    // why a collection that names its audience takes precedence when the
+    // store has one. No store sets both, so the two never actually
+    // compete; this order just says which is the better source when they
+    // would.
+    storeGender: collection.storeGender ?? p.vendor,
   };
 }

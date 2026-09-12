@@ -1,6 +1,6 @@
 import { prisma } from "../db/prisma";
 import { completeJson } from "../llm/openrouter.client";
-import { CATEGORIES, categoryFamily, categoryFromText, isKnownCategory } from "./taxonomy";
+import { CATEGORIES, categoryFamily, categoryFromText, categoryWithDescendants, isKnownCategory } from "./taxonomy";
 import { env } from "../env";
 
 export type Gender = "boys" | "girls" | "unisex";
@@ -75,6 +75,21 @@ const TITLE_OVERRIDES_STORE_FAMILIES = new Set(["accessories", "outerwear", "bod
 const LEGGINGS_SLUGS = new Set(["leggings", "leggings-short", "leggings-long"]);
 const GENERIC_BOTTOMS_SLUGS = new Set(["bottoms", "shorts", "pants"]);
 
+// The same shape of case again, for footwear. Both shoe stores label whole
+// category pages with a bare "נעליים" -- and for the stage pages ("צעד
+// ראשון") that really is all the page says -- while the title names the
+// actual kind: "סנדל בייבי בנים", "מגפי גשם", "נעלי בית". Without this the
+// generic hint would win on every one of them and all several thousand
+// shoes would sit in the one parent bucket, which would make the split in
+// taxonomy.ts pointless. Deliberately as narrow as the leggings rule: only
+// the bare parent counts as too coarse, and only one of its own
+// descendants may refine it -- this is not a general "more specific title
+// wins" rule, which the committed regression suite shows would be wrong
+// (a "מכנסי ג'ינס" titled item under a "מכנסיים" store hint is meant to
+// stay in the generic bottoms bucket, not become pants).
+const GENERIC_SHOES_SLUG = "shoes";
+const SHOE_SLUGS = new Set(categoryWithDescendants(GENERIC_SHOES_SLUG));
+
 export type CategorySource = "store" | "title" | "text-llm" | "vision";
 
 export interface CategoryResolution {
@@ -95,6 +110,9 @@ export function resolveCategory(storeValue: string | null | undefined, title: st
       return { slug: fromTitle, source: "title" };
     }
     if (LEGGINGS_SLUGS.has(fromTitle) && fromStore && GENERIC_BOTTOMS_SLUGS.has(fromStore)) {
+      return { slug: fromTitle, source: "title" };
+    }
+    if (fromStore === GENERIC_SHOES_SLUG && fromTitle !== GENERIC_SHOES_SLUG && SHOE_SLUGS.has(fromTitle)) {
       return { slug: fromTitle, source: "title" };
     }
   }

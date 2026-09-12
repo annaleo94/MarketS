@@ -4,9 +4,20 @@
 // is range overlap -- a product stocked in 18-24m does satisfy a request
 // for a 2-year-old only if the ranges actually meet.
 
+import { categoryWithDescendants } from "./taxonomy";
+
 export interface MonthRange {
   min: number;
   max: number;
+}
+
+// Everything under the footwear branch of the taxonomy. A product filed
+// here is sized by foot whatever its labels happen to read like, which is
+// the one thing isShoeSizeLabel below can't work out on its own.
+const FOOTWEAR_SLUGS = new Set(categoryWithDescendants("shoes"));
+
+export function isFootwearCategory(slug: string | null | undefined): boolean {
+  return slug != null && FOOTWEAR_SLUGS.has(slug);
 }
 
 const YEAR = 12;
@@ -104,8 +115,14 @@ export function isShoeSizeLabel(raw: string): boolean {
   // lower): "18-24" is an extremely common, load-bearing month range used
   // by every store here, and 15-21 would have swallowed it whole -- both
   // endpoints of a range must clear this bound, so "18-24" fails on 18
-  // long before "24" is even considered. 22 is also the lowest shoe size
-  // actually seen in the one catalogue that has them.
+  // long before "24" is even considered.
+  //
+  // Which leaves EU 17-21 -- real baby shoe sizes, and stocked in bulk now
+  // that two footwear stores are in the pilot -- unrecognisable from the
+  // label alone. They genuinely are: "20" is both a baby's shoe size and
+  // nothing at all on the age scale. Nothing more can be squeezed out of
+  // the text, so the product's own category settles those instead, in
+  // productHasSize below.
   const inShoeRange = (n: number) => Number.isFinite(n) && n >= 22 && n <= 45;
 
   const single = Number(label);
@@ -132,7 +149,19 @@ export function productSizeRanges(sizesCsv: string | null): MonthRange[] {
 // whose sizes we couldn't parse at all return true -- an unreadable label
 // is missing information, and a hard filter shouldn't delete stock over
 // that (the shopper still sees the size list and can judge).
-export function productHasSize(sizesCsv: string | null, requested: MonthRange): boolean {
+export function productHasSize(
+  sizesCsv: string | null,
+  requested: MonthRange,
+  categorySlug?: string | null
+): boolean {
+  // Footwear is sized by foot, and an age says nothing about a foot we're
+  // willing to guess at -- so a request in months is one this product
+  // can't answer, whatever its labels look like. Same outcome the shoe-size
+  // labels already got below, now also covering the EU 17-21 baby sizes
+  // that are indistinguishable from noise as bare text, and the odd
+  // footwear listing sized "S/M/L" or by insole centimetres.
+  if (isFootwearCategory(categorySlug)) return false;
+
   const ranges = productSizeRanges(sizesCsv);
   if (ranges.length > 0) return ranges.some((r) => rangesOverlap(r, requested));
 
