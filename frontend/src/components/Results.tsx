@@ -14,9 +14,11 @@ interface Props {
 // restated as machine-looking tags invites doubt about whether we
 // understood rather than confidence that we did.
 //
-// The "השוואה לפי מחיר" toggle. Every store's list is already ordered
-// cheapest to priciest, so the toggle offered a different arrangement of
-// the same order -- a choice that costs a decision and changes nothing.
+// The "השוואה לפי מחיר" toggle. It merged the stores into one list using
+// the same ordering rule each store's own list already uses -- exact
+// matches first, cheapest first within them -- so it re-arranged rather
+// than re-ordered. A choice that costs a decision and changes nothing is
+// worse than no choice.
 export function Results({ data }: Props) {
   return (
     <div className="results">
