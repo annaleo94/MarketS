@@ -26,12 +26,12 @@ export function SavedButton({ onOpen }: { onOpen: () => void }) {
     <button
       className={`saved-button${bumped ? " saved-button--bumped" : ""}`}
       onClick={onOpen}
-      aria-label={items.length > 0 ? `הסל שלי, ${itemCount(items.length)}` : "הסל שלי, ריק"}
+      aria-label={items.length > 0 ? `השמורים שלי, ${itemCount(items.length)}` : "השמורים שלי, ריק"}
     >
       <span className="saved-button__icon" aria-hidden="true">
         ♡
       </span>
-      <span className="saved-button__label">הסל שלי</span>
+      <span className="saved-button__label">השמורים שלי</span>
       {items.length > 0 && <span className="saved-button__count">{items.length}</span>}
     </button>
   );

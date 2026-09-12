@@ -48,6 +48,20 @@ savedRoute.get("/products", async (req, res) => {
       // best price it's been" answerable.
       listPrice: p.listPrice,
       lowestPrice: p.lowestPrice,
+      // The price this one replaced, so a "ירד מ-₪X ל-₪Y" row has both
+      // numbers even for a shopper who saved the product after the drop.
+      previousPrice: p.previousPrice,
+      // Worked out by the sync, not here: someone who hasn't opened the
+      // site for a week must find the badge already up to date, and only
+      // the sync knows the feed moved. See catalog/history.ts.
+      displayStatus: p.displayStatus ?? "in_stock_unchanged",
+      statusChangedAt: p.statusChangedAt,
+      // For the side-by-side comparison of saved items. Material isn't in
+      // the catalogue -- no store publishes it in a machine-readable way,
+      // so the column is simply left out rather than filled with guesses.
+      color: p.color,
+      colors: p.colors ? p.colors.split(",").filter(Boolean) : [],
+      gender: p.gender,
       // A saved product that left its store's feed. Kept rather than
       // deleted precisely so a saved list can say "it's gone" instead of
       // silently dropping the item the shopper was waiting on.

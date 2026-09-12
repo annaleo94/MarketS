@@ -156,11 +156,15 @@ const stored = (over: Partial<StoredProduct> = {}): StoredProduct => ({
   price: 100,
   inStock: true,
   listPrice: null,
+  previousPrice: null,
+  priceChangedAt: null,
   lowestPrice: 100,
   highestPrice: 100,
   delistedAt: null,
+  displayStatus: "in_stock_unchanged",
+  statusChangedAt: null,
   ...over,
-});
+} as StoredProduct);
 const NOW = new Date("2026-01-01T00:00:00Z");
 const kinds = (s: StoredProduct | null, o: Parameters<typeof diffProduct>[1]) =>
   diffProduct(s, o, NOW).events.map((e) => e.kind).sort().join(",");
@@ -226,6 +230,68 @@ for (const c of HISTORY_CASES) {
   check(c.got === c.expect, `[history] ${c.note}`, c.got, c.expect);
 }
 
+// --- display status ---------------------------------------------------
+// The badge each saved-list row shows. Worked out by the sync and stored,
+// so these rules decide what a shopper sees days later without opening
+// anything -- which is exactly why they're pinned down here.
+const HOUR = 3_600_000;
+const statusOf = (s: StoredProduct | null, o: Parameters<typeof diffProduct>[1]) =>
+  diffProduct(s, o, NOW).update.displayStatus;
+
+const STATUS_CASES: { got: string; expect: string; note: string }[] = [
+  { got: statusOf(stored(), { price: 100, inStock: true }), expect: "in_stock_unchanged", note: "nothing going on" },
+  { got: statusOf(stored(), { price: 100, inStock: false }), expect: "out_of_stock", note: "sold out wins over everything else -- it decides whether you can buy at all" },
+  {
+    got: statusOf(stored({ inStock: false }), { price: 100, inStock: true }),
+    expect: "back_in_stock",
+    note: "just came back",
+  },
+  {
+    got: statusOf(stored({ displayStatus: "back_in_stock", statusChangedAt: new Date(NOW.getTime() - 10 * HOUR) }), { price: 100, inStock: true }),
+    expect: "back_in_stock",
+    note: "a return stays highlighted through the first 48 hours",
+  },
+  {
+    got: statusOf(stored({ displayStatus: "back_in_stock", statusChangedAt: new Date(NOW.getTime() - 60 * HOUR) }), { price: 100, inStock: true }),
+    expect: "in_stock_unchanged",
+    note: "and stops being news after them",
+  },
+  { got: statusOf(stored(), { price: 80, inStock: true }), expect: "price_dropped", note: "price fell this sync" },
+  {
+    got: statusOf(stored({ previousPrice: 120, priceChangedAt: new Date(NOW.getTime() - 24 * HOUR) }), { price: 100, inStock: true }),
+    expect: "price_dropped",
+    note: "a drop from an earlier sync still shows -- the badge is a standing state, not a diff of one run",
+  },
+  {
+    got: statusOf(stored({ previousPrice: 120, priceChangedAt: new Date(NOW.getTime() - 40 * 24 * HOUR) }), { price: 100, inStock: true }),
+    expect: "in_stock_unchanged",
+    note: "but a drop from a month ago is no longer news",
+  },
+  {
+    got: statusOf(stored({ previousPrice: 80, priceChangedAt: new Date(NOW.getTime() - 24 * HOUR) }), { price: 100, inStock: true }),
+    expect: "in_stock_unchanged",
+    note: "a previous price BELOW the current one is a rise, not a drop",
+  },
+  { got: statusOf(stored(), { price: 100, inStock: true, listPrice: 150 }), expect: "on_sale", note: "store declared a sale without moving the price" },
+  {
+    got: statusOf(stored(), { price: 80, inStock: true, listPrice: 150 }),
+    expect: "price_dropped",
+    note: "a sale that also cut the price says the more useful of the two (the sale itself still shows as its own chip)",
+  },
+  { got: statusOf(null, { price: 80, inStock: true, listPrice: 150 }), expect: "on_sale", note: "first sighting of a discounted product" },
+  { got: statusOf(null, { price: 80, inStock: true }), expect: "in_stock_unchanged", note: "first sighting of an ordinary one" },
+  { got: statusOf(null, { price: 80, inStock: false }), expect: "out_of_stock", note: "first sighting of a sold-out one" },
+];
+for (const c of STATUS_CASES) {
+  check(c.got === c.expect, `[status] ${c.note}`, c.got, c.expect);
+}
+
+// The 48h highlight counts from when the status was entered, so a quiet
+// sync must not restart the clock and make "back in stock" last forever.
+const entered = new Date(NOW.getTime() - 10 * HOUR);
+const kept = diffProduct(stored({ displayStatus: "back_in_stock", statusChangedAt: entered }), { price: 100, inStock: true }, NOW).update;
+check(kept.statusChangedAt.getTime() === entered.getTime(), "[status] an unchanged status keeps its original timestamp", kept.statusChangedAt, entered);
+
 // The running min/max is what a "lowest price we've seen" claim rests on,
 // so it gets its own check rather than riding on the event list.
 const range = diffProduct(stored({ lowestPrice: 70, highestPrice: 130 }), { price: 60, inStock: true }, NOW).update;
@@ -247,7 +313,8 @@ const total =
   LEG_STYLE_CASES.length +
   AMBIGUOUS_COLOR_CASES.length +
   HISTORY_CASES.length +
-  3;
+  STATUS_CASES.length +
+  4;
 if (failures > 0) {
   console.error(`\n${failures}/${total} regression cases FAILED.`);
   process.exit(1);

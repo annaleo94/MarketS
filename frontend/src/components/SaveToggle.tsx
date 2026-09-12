@@ -20,8 +20,8 @@ export function SaveToggle({
       type="button"
       className={`save-toggle${saved ? " save-toggle--on" : ""}`}
       aria-pressed={saved}
-      aria-label={saved ? `הסרת ${item.title} מהסל` : `שמירת ${item.title} בסל`}
-      title={saved ? "שמור בסל — לחצו להסרה" : "שמירה בסל ומעקב אחרי המחיר"}
+      aria-label={saved ? `הסרת ${item.title} מהשמורים` : `שמירת ${item.title} למעקב`}
+      title={saved ? "נשמר למעקב — לחצו להסרה" : "שמירה למעקב אחרי המחיר והמלאי"}
       onClick={() =>
         toggle({
           id: item.id,
